@@ -18,6 +18,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # On PRs, check the real commits — not the synthetic merge commit
+          # GitHub fabricates (committer GitHub <noreply@github.com>, no DCO).
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Check commits for AI attribution and DCO sign-off
         run: bash .github/scripts/check-attribution.sh
       - name: Check PR body for AI attribution
