@@ -1,0 +1,192 @@
+# launchbound GitHub Action: the convergence safety gate in CI — NO GPU.
+#
+# The action ships inside the launchbound repository itself: when a workflow
+# says `uses: vyncint/launchbound/action@<ref>`, the runner materializes the
+# whole repo. The ref pins these steps; which *tuner* runs is the `version`
+# input, which defaults to the latest release on crates.io.
+#
+# It prunes one kernel's configuration space with reconverge and hands the
+# verdict counts back as outputs. `prune` is the part of the pipeline that
+# needs no GPU and finds the bugs — which is exactly what belongs in CI.
+# See action/README.md for a workflow you can paste.
+name: launchbound safety gate
+description: >-
+  Run launchbound's convergence safety gate over a cuda-oxide kernel's tuning
+  space: every launch/specialization candidate is admitted, admitted with
+  caveats, or refused with a rule ID and source span. No GPU required.
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  kernel:
+    description: >-
+      Path to the kernel directory (the one containing kernel.toml). Its
+      crate must resolve its cuda-device path dependency in your checkout
+      layout — see action/README.md.
+    required: true
+  cc:
+    description: >-
+      Target compute capability for shared-memory context (RC004), e.g.
+      "8.6". A verdict at one --cc does not transfer to another; pass the
+      part you will actually run on.
+    required: true
+  fail-on:
+    description: >-
+      When to fail the job: `tool-error` (default — the analyzer could not
+      answer), `refused` (any candidate was refused; use this to keep a
+      space all-clean), or `never`.
+    required: false
+    default: tool-error
+  version:
+    description: >-
+      Which launchbound release runs the gate, e.g. "1.0.1". The default,
+      `latest`, installs the newest release on crates.io each run. Pin a
+      number if you want the gate to change only when you say so.
+    required: false
+    default: latest
+  reconverge-tag:
+    description: >-
+      The reconverge tag to install (cargo-reconverge + reconverge-driver).
+      Must be built by the toolchain below — the pins move together.
+    required: false
+    default: v0.1.11
+  toolchain:
+    description: The pinned nightly that matches reconverge-tag.
+    required: false
+    default: nightly-2026-04-03
+  summary:
+    description: Write the verdict table to the job summary ("true"/"false").
+    required: false
+    default: "true"
+
+outputs:
+  verdict:
+    description: "`clean`, `caveats`, `refused`, or `tool-error` — the worst outcome present."
+    value: ${{ steps.gate.outputs.verdict }}
+  admitted:
+    description: Candidates admitted clean.
+    value: ${{ steps.gate.outputs.admitted }}
+  caveats:
+    description: Candidates admitted with recorded caveats.
+    value: ${{ steps.gate.outputs.caveats }}
+  refused:
+    description: Candidates refused, with rule IDs in the JSON.
+    value: ${{ steps.gate.outputs.refused }}
+  tool-errors:
+    description: Candidates the analyzer could not answer for (hard stops).
+    value: ${{ steps.gate.outputs.tool-errors }}
+  json:
+    description: The full gate record as JSON (ids, configs, rules, spans).
+    value: ${{ steps.gate.outputs.json }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install the pinned toolchain and reconverge
+      shell: bash
+      env:
+        INPUT_TOOLCHAIN: ${{ inputs.toolchain }}
+        INPUT_RECONVERGE_TAG: ${{ inputs.reconverge-tag }}
+      run: |
+        set -euo pipefail
+        rustup toolchain install "$INPUT_TOOLCHAIN" \
+          --component rustc-dev,llvm-tools,rust-src,rustfmt,clippy --profile minimal
+        # From the tagged source, never a cached binary: a rustc-driver tool
+        # must be built by the exact rustc it wraps.
+        cargo "+$INPUT_TOOLCHAIN" install --locked \
+          --git https://github.com/vyncint/reconverge --tag "$INPUT_RECONVERGE_TAG" \
+          cargo-reconverge
+        cargo "+$INPUT_TOOLCHAIN" install --locked \
+          --git https://github.com/vyncint/reconverge --tag "$INPUT_RECONVERGE_TAG" \
+          reconverge-driver
+
+    - name: Install launchbound
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ROOT: ${{ runner.temp }}/launchbound
+      run: |
+        set -euo pipefail
+        # From crates.io, not from this checkout: the published crate is the
+        # artifact that was tested and released, and --locked pins it to the
+        # exact dependency versions it was released with.
+        args=(launchbound-cli --locked --root "$ROOT")
+        if [ -n "${INPUT_VERSION}" ] && [ "${INPUT_VERSION}" != "latest" ]; then
+          args+=(--version "${INPUT_VERSION}")
+        fi
+        if ! cargo install "${args[@]}"; then
+          echo "::error::Could not install launchbound-cli ${INPUT_VERSION} from crates.io. \
+        Released versions: https://crates.io/crates/launchbound-cli/versions."
+          exit 1
+        fi
+        "$ROOT/bin/launchbound" --version
+
+    - name: Run the safety gate
+      id: gate
+      shell: bash
+      env:
+        # Inputs reach the shell as environment variables, never interpolated
+        # into the script: a kernel path of `"; rm -rf /` is a path, not a
+        # command.
+        INPUT_KERNEL: ${{ inputs.kernel }}
+        INPUT_CC: ${{ inputs.cc }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        ROOT: ${{ runner.temp }}/launchbound
+      run: |
+        set -euo pipefail
+        out="$RUNNER_TEMP/prune.json"
+        code=0
+        "$ROOT/bin/launchbound" prune "$INPUT_KERNEL" --cc "$INPUT_CC" --json > "$out" || code=$?
+        if [ "$code" -ne 0 ] && [ ! -s "$out" ]; then
+          echo "::error::launchbound prune failed (exit $code) with no gate record"
+          exit "$code"
+        fi
+        python3 - "$out" >> "$GITHUB_OUTPUT" <<'PY'
+        import json, sys, collections
+        doc = json.load(open(sys.argv[1]))[0]
+        counts = collections.Counter(c["verdict"] for c in doc["candidates"])
+        admitted = counts.get("clean", 0)
+        caveats = counts.get("admitted_with_caveats", 0)
+        refused = counts.get("disqualified", 0)
+        errors = counts.get("tool_error", 0)
+        verdict = ("tool-error" if errors else "refused" if refused
+                   else "caveats" if caveats else "clean")
+        print(f"verdict={verdict}")
+        print(f"admitted={admitted}")
+        print(f"caveats={caveats}")
+        print(f"refused={refused}")
+        print(f"tool-errors={errors}")
+        print("json<<LAUNCHBOUND_EOF")
+        print(json.dumps(doc))
+        print("LAUNCHBOUND_EOF")
+        PY
+        verdict=$(grep '^verdict=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)
+        if [ "$INPUT_SUMMARY" = "true" ]; then
+          python3 - "$out" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+        import json, sys
+        doc = json.load(open(sys.argv[1]))[0]
+        print(f"### launchbound safety gate — {doc['kernel']} (cc {doc['cc']})\n")
+        print("| candidate | config | verdict | rules |")
+        print("|---|---|---|---|")
+        for c in doc["candidates"]:
+            rules = "; ".join(
+                f"{r.get('rule','?')} at {r.get('span') or '<no span>'}"
+                for r in c.get("records", []) + c.get("caveats", [])
+            ) or "—"
+            print(f"| {c['id']} | {c['config']} | {c['verdict']} | {rules} |")
+        PY
+        fi
+        case "$INPUT_FAIL_ON" in
+          never) ;;
+          refused)
+            if [ "$verdict" = "refused" ] || [ "$verdict" = "tool-error" ]; then
+              echo "::error::safety gate verdict: $verdict"; exit 1
+            fi ;;
+          tool-error)
+            if [ "$verdict" = "tool-error" ]; then
+              echo "::error::the analyzer could not answer (hard stop)"; exit 1
+            fi ;;
+          *) echo "::error::unknown fail-on '$INPUT_FAIL_ON' (never|refused|tool-error)"; exit 1 ;;
+        esac
