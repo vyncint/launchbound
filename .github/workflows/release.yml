@@ -1,6 +1,7 @@
 # Release: on a version tag, run the full test suite, then publish every
-# workspace crate to crates.io in dependency order. Publishing is triggered
-# only by a maintainer pushing a tag — never automatically.
+# workspace crate to crates.io in dependency order via Trusted Publishing
+# (GitHub OIDC — no long-lived token anywhere). Publishing is triggered only
+# by a maintainer pushing a tag — never automatically.
 name: release
 
 on:
@@ -28,13 +29,21 @@ jobs:
   publish:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Trusted Publishing: crates.io trusts this repo+workflow via OIDC and
+      # mints a short-lived token; no secret lives anywhere.
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Install pinned toolchain
         run: rustup show
+      - name: Authenticate with crates.io (OIDC, tokenless)
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
       - name: Publish in dependency order
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
           set -euo pipefail
           version=$(cargo metadata --format-version 1 --no-deps \
@@ -52,7 +61,7 @@ jobs:
               launchbound-runner \
               launchbound-tui \
               launchbound-cli; do
-            if curl -fsS "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; then
+            if curl -fsS -A "launchbound-release (github.com/vyncint/launchbound)" "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; then
               echo "== $crate $version already on crates.io — skipping =="
               continue
             fi

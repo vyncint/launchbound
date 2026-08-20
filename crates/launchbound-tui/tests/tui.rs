@@ -66,7 +66,7 @@ fn spawn(size: (u16, u16)) -> Terminal {
 }
 
 fn quit(mut t: Terminal, context: &str) {
-    t.send(Key::Char('q'));
+    t.send(Key::Char('q')).expect("send q");
     let status = t.wait_exit().expect("TUI did not exit after q");
     assert!(status.success(), "{context}: exited with {status:?}");
 }
@@ -95,13 +95,22 @@ fn resize_relayouts_the_frame() {
 fn ranking_scrolls_a_long_candidate_list() {
     let mut t = spawn((80, 24));
     t.wait_idle(QUIET).expect("idle");
-    t.send(Key::Char('2'));
+    t.send(Key::Char('2')).expect("send 2");
     t.wait_until(|s| s.to_string().contains("ranking ("))
         .expect("ranking view");
     t.wait_idle(QUIET).expect("view settled");
     for _ in 0..5 {
-        t.send(Key::Char('j'));
+        t.send(Key::Char('j')).expect("send j");
     }
+    // Sync on the scroll having APPLIED, not on quiet: at scroll=5 the five
+    // pre-scroll top rows (…0a, …09, …01, …02, …03) are gone and …04 leads.
+    // The original golden was blessed from a too-early capture and never
+    // verified scrolling at all — caught by ubuntu delivering all five keys.
+    t.wait_until(|s| {
+        let frame = s.to_string();
+        frame.contains("c1-0000000000000004") && !frame.contains("c1-0000000000000003")
+    })
+    .expect("scroll applied");
     t.wait_idle(QUIET).expect("scrolled idle");
     assert_golden(
         "ranking-scrolled-80x24.txt",
@@ -116,7 +125,7 @@ fn ranking_scrolls_a_long_candidate_list() {
 fn rejection_view_names_rules_and_spans() {
     let mut t = spawn((80, 24));
     t.wait_idle(QUIET).expect("idle");
-    t.send(Key::Char('3'));
+    t.send(Key::Char('3')).expect("send 3");
     // The help line always contains the word "rejections"; sync on
     // view-body content instead.
     t.wait_until(|s| s.to_string().contains("all refused configurations:"))
@@ -134,7 +143,7 @@ fn rejection_view_names_rules_and_spans() {
 fn progress_view_shows_measured_of_planned() {
     let mut t = spawn((80, 24));
     t.wait_idle(QUIET).expect("idle");
-    t.send(Key::Char('4'));
+    t.send(Key::Char('4')).expect("send 4");
     t.wait_until(|s| s.to_string().contains("measured 11 of"))
         .expect("progress view");
     t.wait_idle(QUIET).expect("settled");

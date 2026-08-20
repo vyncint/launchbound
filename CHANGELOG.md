@@ -9,6 +9,26 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-20
+
+### Added
+
+- The safety gate as a composite GitHub Action (`action/`):
+  `uses: vyncint/launchbound/action@v1` prunes a kernel's space in CI with
+  no GPU, with verdict counts, the full gate record, and a job-summary
+  table as outputs.
+- README badges (license, crates.io, pinned toolchain, GPU-not-required,
+  CI).
+
+### Changed
+
+- Releases publish through crates.io Trusted Publishing (GitHub OIDC): no
+  registry token is stored anywhere.
+- termlens dev-dependency upgraded to 0.5 (fallible `send`, identical
+  closed-terminal behaviour across Linux and macOS).
+
+## [1.0.0] - 2026-08-20
+
 ### Added
 
 - Project bootstrap: pinned workspace (`nightly-2026-04-03`, lockstep with
