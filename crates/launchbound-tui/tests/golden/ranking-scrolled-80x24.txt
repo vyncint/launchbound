@@ -1,0 +1,25 @@
+size: 80x24  cursor: hidden
+launchbound — reduce-flip · gate cc 8.6 · measured · NVIDIA A10G
+27 candidates · 9 admitted · 18 refused · 10 measured ok
+┌ranking (10 measured)─────────────────────────────────────────────────────────┐
+│x c1-000000000000000a  block_x=64 tile=128 unroll=0  0.0210 ms [0.0209, 0.0211│
+│» c1-0000000000000009  block_x=32 tile=512 unroll=4  0.0400 ms [0.0398, 0.0402│
+│  c1-0000000000000001  block_x=32 tile=128 unroll=0  0.0430 ms [0.0428, 0.0432│
+│  c1-0000000000000002  block_x=32 tile=128 unroll=2  0.0460 ms [0.0458, 0.0462│
+│  c1-0000000000000003  block_x=32 tile=128 unroll=4  0.0490 ms [0.0488, 0.0492│
+│  c1-0000000000000004  block_x=32 tile=256 unroll=0  0.0520 ms [0.0517, 0.0523│
+│  c1-0000000000000005  block_x=32 tile=256 unroll=2  0.0550 ms [0.0547, 0.0553│
+│  c1-0000000000000006  block_x=32 tile=256 unroll=4  0.0580 ms [0.0577, 0.0583│
+│  c1-0000000000000007  block_x=32 tile=512 unroll=0  0.0610 ms [0.0607, 0.0613│
+│  c1-0000000000000008  block_x=32 tile=512 unroll=2  0.0640 ms [0.0637, 0.0643│
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+1 overview · 2 ranking · 3 rejections · 4 progress · j/k scroll · q quit

@@ -1,0 +1,23 @@
+# S6 gate record: Spearman rank correlation between the analytical model's
+# ranking and the measured ranking, per corpus kernel. The model ships only
+# with these numbers attached to every estimate (docs/LIMITATIONS.md); a kernel
+# absent here is UNCALIBRATED and the tooling says so.
+#
+# A verdict at one part does not transfer: these were measured on the part
+# below and hold for it alone.
+
+[meta]
+date = "2026-08-20"
+device = "NVIDIA A10G (cc 8.6)"
+driver = "595.71.05"
+evidence = ".gpu-evidence/bench-session/results-*.json (box session 2026-08-20)"
+method = "launchbound model <kernel> --cc 8.6 --results <results.json>"
+
+[kernels]
+# kernel = [rho, n]
+reduce-stable = [0.808, 11]
+matmul-tiled = [0.653, 18]
+scan-block = [0.000, 4]     # n=4: the space is too small to rank meaningfully
+histogram = [0.861, 12]
+stencil-1d = [0.938, 45]
+# reduce-flip: only 3 admitted candidates — below the n>=3-distinct floor.

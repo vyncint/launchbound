@@ -1,0 +1,36 @@
+# Shared-memory privatized histogram: shared-memory capacity pressure. The
+# BINS dimension walks the shared buffer up to the 48 KB default budget,
+# exercising RC004 and the per-target --cc context.
+[kernel]
+name = "histogram"
+entry = "histogram"
+domain = 1
+needs_cc = "8.0"
+
+[dims.block_x]
+values = [64, 128, 256]
+
+[dims.bins]
+role = "spec"
+values = [256, 1024, 4096, 12288]
+
+[bench]
+elements = 1048576
+grid_x = "elements / block_x"
+
+[[bench.args]]
+kind = "in_u32"
+len = "elements"
+modulo = "bins"
+[[bench.args]]
+kind = "len_of"
+of = 0
+[[bench.args]]
+kind = "out_u32"
+len = "bins"
+[[bench.args]]
+kind = "len_of"
+of = 2
+
+[model]
+smem_bytes = "bins * 4"

@@ -1,0 +1,51 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/launchbound-space",
+    "crates/launchbound-prune",
+    "crates/launchbound-build",
+    "crates/launchbound-bench",
+    "crates/launchbound-report",
+    "crates/launchbound-search",
+    "crates/launchbound-model",
+    "crates/launchbound-metal",
+    "crates/launchbound-tui",
+    "crates/launchbound-runner",
+    "crates/launchbound-cli",
+]
+# Corpus kernels are standalone fixtures with a path dependency on the
+# sibling cuda-oxide checkout; they are compiled by the prune/build tooling,
+# never by the workspace, so `cargo test` stays green with no GPU and no
+# checkout (CONTRIBUTING.md).
+exclude = ["corpus"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+# MSRV for crates that do not require the pinned nightly (CONTRIBUTING.md);
+# set by ratatui 0.30. The analysis and compile paths require
+# rust-toolchain.toml's nightly.
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vyncint/launchbound"
+authors = ["Vyncint Ng <vyncint@icloud.com>"]
+keywords = ["cuda", "gpu", "autotuner", "convergence", "kernel"]
+categories = ["development-tools", "development-tools::profiling"]
+
+[workspace.dependencies]
+launchbound-space = { path = "crates/launchbound-space", version = "1.0.0" }
+launchbound-prune = { path = "crates/launchbound-prune", version = "1.0.0" }
+launchbound-build = { path = "crates/launchbound-build", version = "1.0.0" }
+launchbound-bench = { path = "crates/launchbound-bench", version = "1.0.0" }
+launchbound-report = { path = "crates/launchbound-report", version = "1.0.0" }
+launchbound-search = { path = "crates/launchbound-search", version = "1.0.0" }
+launchbound-model = { path = "crates/launchbound-model", version = "1.0.0" }
+launchbound-metal = { path = "crates/launchbound-metal", version = "1.0.0" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+toml = "0.8"
+proptest = "1"

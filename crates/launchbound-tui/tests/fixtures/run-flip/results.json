@@ -1,0 +1,213 @@
+{
+ "schema": "results.v1",
+ "kernel": "reduce-flip",
+ "entry": "reduce",
+ "plan_cc": "8.6",
+ "device_name": "NVIDIA A10G",
+ "device_cc": "8.6",
+ "driver_version": "595.71",
+ "candidates": [
+  {
+   "id": "c1-0000000000000001",
+   "config": "block_x=32 tile=128 unroll=0",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.043,
+    "ci95_lo_ms": 0.042785,
+    "ci95_hi_ms": 0.043215,
+    "min_ms": 0.04257,
+    "max_ms": 0.04343,
+    "mean_ms": 0.043
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000002",
+   "config": "block_x=32 tile=128 unroll=2",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.046,
+    "ci95_lo_ms": 0.04577,
+    "ci95_hi_ms": 0.04623,
+    "min_ms": 0.04554,
+    "max_ms": 0.04646,
+    "mean_ms": 0.046
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000003",
+   "config": "block_x=32 tile=128 unroll=4",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.049,
+    "ci95_lo_ms": 0.048755,
+    "ci95_hi_ms": 0.049245,
+    "min_ms": 0.04851,
+    "max_ms": 0.04949,
+    "mean_ms": 0.049
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000004",
+   "config": "block_x=32 tile=256 unroll=0",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.052,
+    "ci95_lo_ms": 0.05174,
+    "ci95_hi_ms": 0.05226,
+    "min_ms": 0.05148,
+    "max_ms": 0.05252,
+    "mean_ms": 0.052
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000005",
+   "config": "block_x=32 tile=256 unroll=2",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.055,
+    "ci95_lo_ms": 0.054725,
+    "ci95_hi_ms": 0.055275,
+    "min_ms": 0.05445,
+    "max_ms": 0.05555,
+    "mean_ms": 0.055
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000006",
+   "config": "block_x=32 tile=256 unroll=4",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.058,
+    "ci95_lo_ms": 0.05771,
+    "ci95_hi_ms": 0.05829,
+    "min_ms": 0.05742,
+    "max_ms": 0.05858,
+    "mean_ms": 0.058
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000007",
+   "config": "block_x=32 tile=512 unroll=0",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.061,
+    "ci95_lo_ms": 0.060695,
+    "ci95_hi_ms": 0.061305,
+    "min_ms": 0.06039,
+    "max_ms": 0.06161,
+    "mean_ms": 0.061
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000008",
+   "config": "block_x=32 tile=512 unroll=2",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.064,
+    "ci95_lo_ms": 0.06368,
+    "ci95_hi_ms": 0.06432,
+    "min_ms": 0.06336,
+    "max_ms": 0.06464,
+    "mean_ms": 0.064
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-0000000000000009",
+   "config": "block_x=32 tile=512 unroll=4",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.04,
+    "ci95_lo_ms": 0.0398,
+    "ci95_hi_ms": 0.0402,
+    "min_ms": 0.0396,
+    "max_ms": 0.0404,
+    "mean_ms": 0.04
+   },
+   "gpu_seconds": 1.5
+  },
+  {
+   "id": "c1-000000000000000a",
+   "config": "block_x=64 tile=128 unroll=0",
+   "status": "ok",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "summary": {
+    "n": 100,
+    "outliers_rejected": 0,
+    "median_ms": 0.021,
+    "ci95_lo_ms": 0.020895,
+    "ci95_hi_ms": 0.021105,
+    "min_ms": 0.02079,
+    "max_ms": 0.02121,
+    "mean_ms": 0.021
+   },
+   "gpu_seconds": 2.0
+  },
+  {
+   "id": "c1-000000000000000b",
+   "config": "block_x=64 tile=128 unroll=2",
+   "status": "timeout",
+   "warmup": 20,
+   "repeats": 100,
+   "times_ms": [],
+   "error": "unsafe candidate did not complete within 10s; presumed hung",
+   "summary": null,
+   "gpu_seconds": 10.0
+  }
+ ],
+ "total_gpu_seconds": 25.0
+}

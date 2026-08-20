@@ -1,0 +1,141 @@
+---
+source: crates/launchbound-report/tests/schema_and_golden.rs
+assertion_line: 137
+expression: value
+---
+{
+  "allow_unsafe_reason": "S4 gate test: measuring refused configs to prove the rejection report",
+  "candidates": [
+    {
+      "config": "block_x=32 tile=128",
+      "gpu_seconds": 3.0,
+      "id": "c1-aaaa",
+      "measurement_status": "ok",
+      "rules": [],
+      "summary": {
+        "ci95_hi_ms": 0.0503,
+        "ci95_lo_ms": 0.050100000000000006,
+        "max_ms": 0.0504,
+        "mean_ms": 0.05019999999999996,
+        "median_ms": 0.0502,
+        "min_ms": 0.05,
+        "n": 50,
+        "outliers_rejected": 0
+      },
+      "verdict": "clean"
+    },
+    {
+      "config": "block_x=32 tile=256",
+      "gpu_seconds": 3.0,
+      "id": "c1-bbbb",
+      "measurement_status": "ok",
+      "rules": [],
+      "summary": {
+        "ci95_hi_ms": 0.0403,
+        "ci95_lo_ms": 0.0401,
+        "max_ms": 0.0404,
+        "mean_ms": 0.04020000000000001,
+        "median_ms": 0.0402,
+        "min_ms": 0.04,
+        "n": 50,
+        "outliers_rejected": 0
+      },
+      "verdict": "clean"
+    },
+    {
+      "config": "block_x=128 tile=128",
+      "gpu_seconds": 3.0,
+      "id": "c1-cccc",
+      "measurement_status": "ok",
+      "rules": [
+        {
+          "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)",
+          "rule": "RC001",
+          "span": "src/lib.rs:33:13"
+        }
+      ],
+      "summary": {
+        "ci95_hi_ms": 0.0203,
+        "ci95_lo_ms": 0.0201,
+        "max_ms": 0.0204,
+        "mean_ms": 0.020199999999999992,
+        "median_ms": 0.0202,
+        "min_ms": 0.02,
+        "n": 50,
+        "outliers_rejected": 0
+      },
+      "verdict": "disqualified"
+    },
+    {
+      "config": "block_x=256 tile=128",
+      "gpu_seconds": 10.0,
+      "id": "c1-dddd",
+      "measurement_error": "unsafe candidate did not complete within 10s; presumed hung",
+      "measurement_status": "timeout",
+      "rules": [
+        {
+          "reason": "divergence source `warp_id()` splits a 256-thread block (8 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)",
+          "rule": "RC001",
+          "span": "src/lib.rs:33:13"
+        }
+      ],
+      "verdict": "disqualified"
+    }
+  ],
+  "chosen": {
+    "config": "block_x=32 tile=256",
+    "id": "c1-bbbb",
+    "summary": {
+      "ci95_hi_ms": 0.0403,
+      "ci95_lo_ms": 0.0401,
+      "max_ms": 0.0404,
+      "mean_ms": 0.04020000000000001,
+      "median_ms": 0.0402,
+      "min_ms": 0.04,
+      "n": 50,
+      "outliers_rejected": 0
+    }
+  },
+  "convergence_gate": "full",
+  "device": {
+    "cc": "8.6",
+    "driver_version": "595.71",
+    "name": "NVIDIA A10G"
+  },
+  "gate_cc": "8.6",
+  "indistinguishable_from_chosen": [],
+  "kernel": "reduce-flip",
+  "measurement_kind": "measured",
+  "rejected_faster": [
+    {
+      "config": "block_x=128 tile=128",
+      "id": "c1-cccc",
+      "rules": [
+        {
+          "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)",
+          "rule": "RC001",
+          "span": "src/lib.rs:33:13"
+        }
+      ],
+      "speedup_vs_chosen": 1.99009900990099,
+      "summary": {
+        "ci95_hi_ms": 0.0203,
+        "ci95_lo_ms": 0.0201,
+        "max_ms": 0.0204,
+        "mean_ms": 0.020199999999999992,
+        "median_ms": 0.0202,
+        "min_ms": 0.02,
+        "n": 50,
+        "outliers_rejected": 0
+      }
+    }
+  ],
+  "schema": "report.v1",
+  "totals": {
+    "admitted": 2,
+    "candidates": 4,
+    "gpu_seconds": 19.0,
+    "measured_ok": 3,
+    "refused": 2
+  }
+}

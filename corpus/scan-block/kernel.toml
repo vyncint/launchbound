@@ -1,0 +1,40 @@
+# Block-level inclusive prefix scan (Hillis-Steele): barrier-dense, two
+# barriers per doubling round, all unconditional.
+[kernel]
+name = "scan-block"
+entry = "scan"
+domain = 1
+needs_cc = "8.0"
+
+[dims.block_x]
+values = [64, 128, 256, 512]
+
+[dims.block_max]
+role = "spec"
+values = [64, 128, 256, 512]
+
+[constraints]
+# The scan length and shared buffer are sized by BLOCK_MAX; the launch must
+# match exactly or lanes above block_x would read stale shared memory.
+exprs = ["block_x == block_max"]
+
+[bench]
+elements = 1048576
+grid_x = "elements / block_x"
+
+[[bench.args]]
+kind = "in_u32"
+len = "elements"
+modulo = 65536
+[[bench.args]]
+kind = "len_of"
+of = 0
+[[bench.args]]
+kind = "out_u32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 2
+
+[model]
+smem_bytes = "block_max * 4"

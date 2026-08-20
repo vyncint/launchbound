@@ -1,0 +1,287 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/vyncint/launchbound/schemas/report.v1.json",
+  "title": "launchbound report.v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "kernel",
+    "gate_cc",
+    "measurement_kind",
+    "candidates",
+    "totals",
+    "convergence_gate"
+  ],
+  "properties": {
+    "schema": {
+      "const": "report.v1"
+    },
+    "kernel": {
+      "type": "string"
+    },
+    "gate_cc": {
+      "type": "string"
+    },
+    "measurement_kind": {
+      "enum": [
+        "measured",
+        "estimated"
+      ]
+    },
+    "device": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "name",
+        "cc",
+        "driver_version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cc": {
+          "type": "string"
+        },
+        "driver_version": {
+          "type": "string"
+        }
+      }
+    },
+    "allow_unsafe_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "chosen": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "id",
+        "config",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "config": {
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/definitions/summary"
+        }
+      }
+    },
+    "indistinguishable_from_chosen": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rejected_faster": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "config",
+          "summary",
+          "speedup_vs_chosen",
+          "rules"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "config": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/definitions/summary"
+          },
+          "speedup_vs_chosen": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/rule"
+            }
+          }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "config",
+          "verdict",
+          "measurement_status",
+          "gpu_seconds"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "config": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "clean",
+              "admitted_with_caveats",
+              "disqualified",
+              "tool_error",
+              "ungated"
+            ]
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/rule"
+            }
+          },
+          "measurement_status": {
+            "enum": [
+              "ok",
+              "error",
+              "timeout",
+              "unmeasured"
+            ]
+          },
+          "summary": {
+            "$ref": "#/definitions/summary"
+          },
+          "measurement_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gpu_seconds": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "candidates",
+        "admitted",
+        "refused",
+        "measured_ok",
+        "gpu_seconds"
+      ],
+      "properties": {
+        "candidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "admitted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refused": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "measured_ok": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gpu_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "convergence_gate": {
+      "enum": [
+        "full",
+        "none"
+      ]
+    }
+  },
+  "definitions": {
+    "summary": {
+      "type": "object",
+      "required": [
+        "n",
+        "outliers_rejected",
+        "median_ms",
+        "ci95_lo_ms",
+        "ci95_hi_ms",
+        "min_ms",
+        "max_ms",
+        "mean_ms"
+      ],
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "outliers_rejected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "median_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ci95_lo_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ci95_hi_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "min_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mean_ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "rule",
+        "reason"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "span": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

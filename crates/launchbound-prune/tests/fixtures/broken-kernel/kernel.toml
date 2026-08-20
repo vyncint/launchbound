@@ -1,0 +1,12 @@
+# Fixture spec for the exit-2 hard-stop gate test.
+[kernel]
+name = "broken-kernel"
+entry = "broken"
+domain = 1
+
+[dims.block_x]
+values = [32, 64]
+
+[dims.tile]
+role = "spec"
+values = [128]

@@ -1,0 +1,331 @@
+{
+ "schema": "verdicts.v1",
+ "kernel": "reduce-flip",
+ "cc": "8.6",
+ "candidates": [
+  {
+   "id": "c1-0000000000000001",
+   "config": "block_x=32 tile=128 unroll=0",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000002",
+   "config": "block_x=32 tile=128 unroll=2",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000003",
+   "config": "block_x=32 tile=128 unroll=4",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000004",
+   "config": "block_x=32 tile=256 unroll=0",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000005",
+   "config": "block_x=32 tile=256 unroll=2",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000006",
+   "config": "block_x=32 tile=256 unroll=4",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000007",
+   "config": "block_x=32 tile=512 unroll=0",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000008",
+   "config": "block_x=32 tile=512 unroll=2",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-0000000000000009",
+   "config": "block_x=32 tile=512 unroll=4",
+   "verdict": "clean",
+   "block_threads": 32
+  },
+  {
+   "id": "c1-000000000000000a",
+   "config": "block_x=64 tile=128 unroll=0",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-000000000000000b",
+   "config": "block_x=64 tile=128 unroll=2",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-000000000000000c",
+   "config": "block_x=64 tile=128 unroll=4",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-000000000000000d",
+   "config": "block_x=64 tile=256 unroll=0",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-000000000000000e",
+   "config": "block_x=64 tile=256 unroll=2",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-000000000000000f",
+   "config": "block_x=64 tile=256 unroll=4",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000010",
+   "config": "block_x=64 tile=512 unroll=0",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000011",
+   "config": "block_x=64 tile=512 unroll=2",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000012",
+   "config": "block_x=64 tile=512 unroll=4",
+   "verdict": "disqualified",
+   "block_threads": 64,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 64-thread block (2 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000013",
+   "config": "block_x=128 tile=128 unroll=0",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000014",
+   "config": "block_x=128 tile=128 unroll=2",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000015",
+   "config": "block_x=128 tile=128 unroll=4",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000016",
+   "config": "block_x=128 tile=256 unroll=0",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000017",
+   "config": "block_x=128 tile=256 unroll=2",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000018",
+   "config": "block_x=128 tile=256 unroll=4",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-0000000000000019",
+   "config": "block_x=128 tile=512 unroll=0",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-000000000000001a",
+   "config": "block_x=128 tile=512 unroll=2",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  },
+  {
+   "id": "c1-000000000000001b",
+   "config": "block_x=128 tile=512 unroll=4",
+   "verdict": "disqualified",
+   "block_threads": 128,
+   "records": [
+    {
+     "rule": "RC001",
+     "confidence": "warning",
+     "message": "barrier under divergence",
+     "span": "src/lib.rs:33:13",
+     "reason": "divergence source `warp_id()` splits a 128-thread block (4 warps) at a block-wide barrier; safe only at one warp (<= 32 threads)"
+    }
+   ]
+  }
+ ]
+}

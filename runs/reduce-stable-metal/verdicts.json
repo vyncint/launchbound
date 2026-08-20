@@ -1,0 +1,74 @@
+{
+  "candidates": [
+    {
+      "block_threads": 32,
+      "config": "block_x=32 tile=128",
+      "id": "c1-f5b50bf81efd7621",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 32,
+      "config": "block_x=32 tile=256",
+      "id": "c1-c8a587e903831a0f",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 32,
+      "config": "block_x=32 tile=512",
+      "id": "c1-10d6c6cc932d1d77",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 64,
+      "config": "block_x=64 tile=128",
+      "id": "c1-e4893bbe9e8d3379",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 64,
+      "config": "block_x=64 tile=256",
+      "id": "c1-fb95e4ee0ec920f6",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 64,
+      "config": "block_x=64 tile=512",
+      "id": "c1-9b07a475f71ad979",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 128,
+      "config": "block_x=128 tile=128",
+      "id": "c1-43e865c2e1620697",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 128,
+      "config": "block_x=128 tile=256",
+      "id": "c1-845a62c8785e0a94",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 128,
+      "config": "block_x=128 tile=512",
+      "id": "c1-b03f7ed3633c800d",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 256,
+      "config": "block_x=256 tile=256",
+      "id": "c1-a0fdcb26d0491a52",
+      "verdict": "ungated"
+    },
+    {
+      "block_threads": 256,
+      "config": "block_x=256 tile=512",
+      "id": "c1-3fe30345938b783f",
+      "verdict": "ungated"
+    }
+  ],
+  "cc": "metal",
+  "gate": "none",
+  "kernel": "reduce-stable",
+  "schema": "verdicts.v1"
+}

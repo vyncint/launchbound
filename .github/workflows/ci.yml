@@ -1,0 +1,42 @@
+# The main gate: fmt, clippy -D warnings, tests, cargo-deny, schema
+# validation — identical to `just ci` locally, on runners with NO GPU. That a
+# plain runner stays green is itself the no-GPU path's regression test.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain from rust-toolchain.toml
+        run: rustup show
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-deny
+      - run: just ci
+
+  # MSRV applies to the crates that do not need the pinned nightly
+  # (CONTRIBUTING.md); checked against the committed lockfile.
+  msrv:
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.88"
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install 1.88 --profile minimal
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: just msrv

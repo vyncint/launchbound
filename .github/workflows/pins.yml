@@ -1,0 +1,56 @@
+# Scheduled pin watch: reports when cuda-oxide or reconverge
+# move upstream by opening an issue. It NEVER bumps a pin — a bump is a human
+# decision, its own commit, and a gate re-run (CONTRIBUTING.md).
+name: pins
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # weekly, Monday morning UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# The lockstep pin set. A pin bump updates these values (and
+# rust-toolchain.toml) in its own commit.
+env:
+  CUDA_OXIDE_PIN: 50d07314eb8b7d5ec821ba02b0048a753c20dd4e
+  CUDA_OXIDE_REPO: NVlabs/cuda-oxide
+  RECONVERGE_PIN: v0.1.11
+  RECONVERGE_REPO: vyncint/reconverge
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Compare upstreams to pins
+        run: |
+          set -euo pipefail
+          drift=""
+
+          head_sha=$(gh api "repos/$CUDA_OXIDE_REPO/commits/HEAD" -q '.sha')
+          if [ "$head_sha" != "$CUDA_OXIDE_PIN" ]; then
+            drift="$drift- \`$CUDA_OXIDE_REPO\` HEAD is \`${head_sha:0:8}\`, pin is \`${CUDA_OXIDE_PIN:0:8}\`"$'\n'
+          fi
+
+          latest_tag=$(gh api "repos/$RECONVERGE_REPO/tags" -q '.[0].name')
+          if [ "$latest_tag" != "$RECONVERGE_PIN" ]; then
+            drift="$drift- \`$RECONVERGE_REPO\` latest tag is \`$latest_tag\`, pin is \`$RECONVERGE_PIN\`"$'\n'
+          fi
+
+          if [ -z "$drift" ]; then
+            echo "Pins current."
+            exit 0
+          fi
+
+          title="pins: upstream moved past the lockstep pin set"
+          if gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+              --search "in:title \"$title\"" --json title -q '.[].title' | grep -qF "$title"; then
+            echo "Drift detected but an open issue already reports it."
+            exit 0
+          fi
+
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$(printf 'Weekly pin watch found upstream movement:\n\n%s\nPolicy (CONTRIBUTING.md): the nightly, cuda-oxide, and reconverge pins move together or not at all. A bump is its own commit with its own gate re-run. This workflow never bumps — a human decides.' "$drift")"

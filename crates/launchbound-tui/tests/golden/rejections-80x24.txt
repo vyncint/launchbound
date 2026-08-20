@@ -1,0 +1,25 @@
+size: 80x24  cursor: hidden
+launchbound — reduce-flip · gate cc 8.6 · measured · NVIDIA A10G
+27 candidates · 9 admitted · 18 refused · 10 measured ok
+┌rejections────────────────────────────────────────────────────────────────────┐
+│REFUSED BUT FASTER — a tuner without a convergence gate would hand you one:   │
+│  c1-000000000000000a  block_x=64 tile=128 unroll=0  0.0210 ms — 1.90x faster │
+│    RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-threa│
+│                                                                              │
+│all refused configurations:                                                   │
+│  x c1-000000000000000a  block_x=64 tile=128 unroll=0                         │
+│      RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-thr│
+│  x c1-000000000000000b  block_x=64 tile=128 unroll=2                         │
+│      RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-thr│
+│  x c1-000000000000000c  block_x=64 tile=128 unroll=4                         │
+│      RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-thr│
+│  x c1-000000000000000d  block_x=64 tile=256 unroll=0                         │
+│      RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-thr│
+│  x c1-000000000000000e  block_x=64 tile=256 unroll=2                         │
+│      RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-thr│
+│  x c1-000000000000000f  block_x=64 tile=256 unroll=4                         │
+│      RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-thr│
+│  x c1-0000000000000010  block_x=64 tile=512 unroll=0                         │
+│      RC001 at src/lib.rs:33:13: divergence source `warp_id()` splits a 64-thr│
+└──────────────────────────────────────────────────────────────────────────────┘
+1 overview · 2 ranking · 3 rejections · 4 progress · j/k scroll · q quit

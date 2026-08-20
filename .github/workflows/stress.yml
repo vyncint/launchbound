@@ -1,0 +1,24 @@
+# S8: the termlens stress gate on both OSes. Hermetic fixtures, a real PTY,
+# no GPU anywhere.
+name: stress
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  termlens:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        run: rustup show
+      - run: cargo test -p launchbound-tui --test tui

@@ -1,0 +1,75 @@
+# Tiled matmul: a genuinely large tile/block space. Rectangular TM x TN
+# output tiles with TK-deep shared staging; block shape follows the tile.
+[kernel]
+name = "matmul-tiled"
+entry = "matmul"
+domain = 2
+needs_cc = "8.0"
+
+[dims.block_x]
+values = [16, 32, 64]
+
+[dims.block_y]
+values = [16, 32, 64]
+
+[dims.tm]
+role = "spec"
+values = [16, 32, 64]
+
+[dims.tn]
+role = "spec"
+values = [16, 32, 64]
+
+[dims.tk]
+role = "spec"
+values = [8, 16, 32]
+
+[constraints]
+# One thread per output element: the block IS the tile.
+exprs = [
+  "block_x == tn",
+  "block_y == tm",
+  "block_x * block_y <= 1024",
+  # Two f32 staging tiles must fit the 48 KB default smem budget.
+  "tm * tk * 4 + tk * tn * 4 <= 49152",
+]
+
+[bench]
+# M = N = K = 1024. PTX ABI (inspected 2026-08-20): a(ptr,len), b(ptr,len),
+# c(ptr,len,row_width u32), k u32, n u32 — declaration-order flattening;
+# with square matrices the three trailing u32s are all 1024, so the plan is
+# robust to their internal order.
+elements = 1048576
+grid_x = "1024 / tn"
+grid_y = "1024 / tm"
+
+[[bench.args]]
+kind = "in_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 0
+[[bench.args]]
+kind = "in_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 2
+[[bench.args]]
+kind = "out_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 4
+[[bench.args]]
+kind = "u32"
+value = 1024
+[[bench.args]]
+kind = "u32"
+value = 1024
+[[bench.args]]
+kind = "u32"
+value = 1024
+
+[model]
+smem_bytes = "tm * tk * 4 + tk * tn * 4"

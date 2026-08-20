@@ -1,0 +1,25 @@
+[package]
+name = "launchbound-tui"
+description = "TUI over a run directory: space, progress, ranking, and the rejection view"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[[bin]]
+name = "launchbound-tui"
+path = "src/main.rs"
+
+[dependencies]
+launchbound-report = { workspace = true }
+anyhow = { workspace = true }
+crossterm = "0.29"
+ratatui = "0.30"
+
+[dev-dependencies]
+termlens = { version = "0.3.0", default-features = false }

@@ -1,0 +1,12 @@
+[package]
+name = "broken-kernel"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Fixture: intentionally does not compile, to force a reconverge exit 2 and
+# prove the gate treats it as a hard stop, never a pass.
+[workspace]
+
+[dependencies]
+cuda-device = { path = "../../../../../../cuda-oxide/crates/cuda-device" }

@@ -1,0 +1,41 @@
+# The canonical known-flip kernel (see the README): a warp-leader guard
+# around a block-wide barrier. Safe at one warp per block, undefined above.
+[kernel]
+name = "reduce-flip"
+entry = "reduce"
+domain = 1
+needs_cc = "8.0" # cuda-oxide emits .target sm_80 PTX
+known = "flip"
+
+[dims.block_x]
+values = [32, 64, 128, 256]
+
+[dims.tile]
+role = "spec"
+values = [128, 256, 512]
+
+[constraints]
+exprs = ["tile % block_x == 0"]
+
+[bench]
+elements = 1048576
+grid_x = "elements / block_x"
+
+# PTX ABI (vecadd-verified lowering): &[f32] -> ptr,len; DisjointSlice<f32>
+# -> ptr,len. Four .param slots; `stage` validates against the real PTX.
+[[bench.args]]
+kind = "in_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 0
+[[bench.args]]
+kind = "out_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 2
+
+[model]
+# f32 tile in shared memory.
+smem_bytes = "tile * 4"

@@ -1,0 +1,18 @@
+[package]
+name = "launchbound-search"
+description = "Search strategies: exhaustive and seeded random, budget-aware, resumable, deterministic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+launchbound-bench = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

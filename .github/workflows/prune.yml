@@ -1,0 +1,57 @@
+# The one CI job that exercises the product thesis, and it needs no
+# hardware: the safety gate over the whole corpus on a plain runner
+# (CONTRIBUTING.md). Provisions the pinned cuda-oxide checkout and a pinned
+# cargo-reconverge, then runs the gate tests and the corpus prune.
+name: prune
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The corpus expects the cuda-oxide checkout as a sibling.
+          path: launchbound
+      - name: Check out pinned cuda-oxide as sibling
+        uses: actions/checkout@v4
+        with:
+          repository: NVlabs/cuda-oxide
+          ref: 50d07314eb8b7d5ec821ba02b0048a753c20dd4e
+          path: cuda-oxide
+      - name: Install pinned toolchain
+        working-directory: launchbound
+        run: rustup show
+      - name: Cache cargo-reconverge
+        id: cache-reconverge
+        uses: actions/cache@v4
+        with:
+          # The wrapper is nothing without the rustc driver beside it.
+          path: |
+            ~/.cargo/bin/cargo-reconverge
+            ~/.cargo/bin/reconverge-driver
+          key: cargo-reconverge-v0.1.11-${{ runner.os }}-v2
+      - name: Install pinned cargo-reconverge + driver
+        if: steps.cache-reconverge.outputs.cache-hit != 'true'
+        run: |
+          rustup component add rustc-dev llvm-tools rust-src --toolchain nightly-2026-04-03
+          cargo +nightly-2026-04-03 install --git https://github.com/vyncint/reconverge \
+            --tag v0.1.11 cargo-reconverge
+          cargo +nightly-2026-04-03 install --git https://github.com/vyncint/reconverge \
+            --tag v0.1.11 reconverge-driver
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - name: Gate tests (the most important in the repo)
+        working-directory: launchbound
+        run: just gate
+      - name: Safety gate over the whole corpus
+        working-directory: launchbound
+        run: just prune

@@ -1,0 +1,28 @@
+[package]
+name = "launchbound-metal"
+description = "Metal backend: real measurement on Apple Silicon — with NO convergence gate, stated on every surface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+launchbound-bench = { workspace = true }
+launchbound-space = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = "0.29"
+objc = "0.2"
+
+# objc 0.2's sel_impl! macro probes `feature = "cargo-clippy"`, a cfg value
+# modern rustc flags as unexpected. Declare it expected; the macro is not
+# ours to fix.
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(feature, values("cargo-clippy"))']

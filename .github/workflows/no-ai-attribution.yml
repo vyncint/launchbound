@@ -1,0 +1,33 @@
+# Repo policy (CONTRIBUTING.md): zero AI attribution anywhere, plus DCO
+# sign-off on every commit. This checks the full history — the repo is small
+# enough that scanning everything is cheaper than getting ranges right.
+name: no-ai-attribution
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check commits for AI attribution and DCO sign-off
+        run: bash .github/scripts/check-attribution.sh
+      - name: Check PR body for AI attribution
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.txt
+          if grep -inE 'co-authored-by:.*(claude|copilot|chatgpt|gpt|openai|anthropic|gemini|cursor|codex|devin|aider|assistant|\[bot\])|generated (with|by).*(claude|copilot|chatgpt|gpt|openai|anthropic|gemini|cursor|codex|devin|aider|ai\b)|🤖' /tmp/pr-body.txt; then
+            echo "::error::PR body contains AI attribution (repo policy: CONTRIBUTING.md)"
+            exit 1
+          fi
+          echo "PR body clean."

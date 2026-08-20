@@ -1,0 +1,6 @@
+target/
+# GPU measurement evidence logs are for the human, not repo content (CLAUDE.md §5.2).
+.gpu-evidence/
+# Staged bench plans and box session outputs are artifacts, not source.
+/plans/
+/bench-session/

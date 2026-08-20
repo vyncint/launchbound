@@ -1,0 +1,53 @@
+# 1D stencil: register pressure and unroll trade-offs. No barriers at all;
+# the tuning story is UNROLL x RADIUS x launch_bounds against the register
+# file, not safety.
+[kernel]
+name = "stencil-1d"
+entry = "stencil"
+domain = 1
+needs_cc = "8.0"
+
+[dims.block_x]
+values = [64, 128, 256]
+
+[dims.radius]
+role = "spec"
+values = [1, 2, 4]
+
+[dims.unroll]
+role = "spec"
+# cuda-oxide's #[unroll] accepts 2..=1024, or 0 for full unrolling; a
+# factor of 1 is a compile error (found the hard way — cargo check under
+# reconverge does not evaluate the const, real codegen does).
+values = [0, 2, 4]
+
+[dims.lb_max]
+role = "spec"
+values = [128, 256]
+
+[constraints]
+# .maxntid must cover the launch or the driver rejects it.
+exprs = ["block_x <= lb_max"]
+
+[bench]
+elements = 1048576
+grid_x = "elements / block_x"
+
+# PTX ABI (vecadd-verified lowering): &[f32] -> ptr,len; DisjointSlice<f32>
+# -> ptr,len. Four .param slots; `stage` validates against the real PTX.
+[[bench.args]]
+kind = "in_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 0
+[[bench.args]]
+kind = "out_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 2
+
+[model]
+# No shared memory at all.
+smem_bytes = "0"

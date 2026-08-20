@@ -1,0 +1,8 @@
+{
+ "schema": "plan.v1",
+ "kernel": "reduce-flip",
+ "entry": "reduce",
+ "cc": "8.6",
+ "allow_unsafe_reason": "TUI fixture: refused candidates measured to exercise the rejection view",
+ "candidates": []
+}

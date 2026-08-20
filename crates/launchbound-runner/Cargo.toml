@@ -1,0 +1,20 @@
+[package]
+name = "launchbound-runner"
+description = "The bench-plan executor that runs on the machine with the GPU"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[[bin]]
+name = "launchbound-runner"
+path = "src/main.rs"
+
+[dependencies]
+launchbound-bench = { workspace = true }
+launchbound-search = { workspace = true }
