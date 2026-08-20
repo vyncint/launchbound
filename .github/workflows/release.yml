@@ -6,7 +6,9 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    # Full versions only: the floating v1 action tag moves on releases and
+    # must not re-trigger publishing.
+    tags: ["v[0-9]*.[0-9]*.[0-9]*"]
   # Manual re-run for resuming a rate-limited publish; skips crates whose
   # version is already on the registry.
   workflow_dispatch:

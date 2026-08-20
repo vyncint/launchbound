@@ -131,6 +131,12 @@ runs:
         # command.
         INPUT_KERNEL: ${{ inputs.kernel }}
         INPUT_CC: ${{ inputs.cc }}
+        # The driver is built by the pinned nightly and dynamically links
+        # its librustc_driver: every cargo/rustc in this step must BE that
+        # toolchain, or the driver fails to load (a hard stop, not a pass —
+        # but a useless one). This is why reconverge pairs its releases
+        # with a toolchain.
+        RUSTUP_TOOLCHAIN: ${{ inputs.toolchain }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_SUMMARY: ${{ inputs.summary }}
         ROOT: ${{ runner.temp }}/launchbound
