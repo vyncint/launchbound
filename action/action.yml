@@ -45,14 +45,21 @@ inputs:
       number if you want the gate to change only when you say so.
     required: false
     default: latest
-  reconverge-tag:
+  reconverge-version:
     description: >-
-      The reconverge tag to install (cargo-reconverge + reconverge-driver).
-      Must be built by the toolchain below — the pins move together.
+      The reconverge release to install from crates.io (cargo-reconverge +
+      reconverge-driver). Must be built by the toolchain below — the pins
+      move together.
     required: false
-    default: v0.1.11
+    default: "0.1.11"
   toolchain:
-    description: The pinned nightly that matches reconverge-tag.
+    description: >-
+      The pinned nightly that matches reconverge-version; the pair moves
+      together. NOTE: the gate compiles and analyzes your kernel under
+      THIS toolchain (it outranks your repo's rust-toolchain.toml) — that
+      is inherent to reconverge being a rustc driver. If your kernel needs
+      a different toolchain, pass a matching reconverge-version/toolchain
+      pair.
     required: false
     default: nightly-2026-04-03
   summary:
@@ -87,25 +94,29 @@ runs:
       shell: bash
       env:
         INPUT_TOOLCHAIN: ${{ inputs.toolchain }}
-        INPUT_RECONVERGE_TAG: ${{ inputs.reconverge-tag }}
+        INPUT_RECONVERGE_VERSION: ${{ inputs.reconverge-version }}
+        # One pinning mechanism everywhere: RUSTUP_TOOLCHAIN outranks any
+        # rust-toolchain.toml in the consumer checkout and reaches every
+        # cargo/rustc subprocess. All three steps set it.
+        RUSTUP_TOOLCHAIN: ${{ inputs.toolchain }}
       run: |
         set -euo pipefail
         rustup toolchain install "$INPUT_TOOLCHAIN" \
           --component rustc-dev,llvm-tools,rust-src,rustfmt,clippy --profile minimal
-        # From the tagged source, never a cached binary: a rustc-driver tool
-        # must be built by the exact rustc it wraps.
-        cargo "+$INPUT_TOOLCHAIN" install --locked \
-          --git https://github.com/vyncint/reconverge --tag "$INPUT_RECONVERGE_TAG" \
-          cargo-reconverge
-        cargo "+$INPUT_TOOLCHAIN" install --locked \
-          --git https://github.com/vyncint/reconverge --tag "$INPUT_RECONVERGE_TAG" \
-          reconverge-driver
+        # From crates.io, built here, never a cached binary: a rustc-driver
+        # tool must be built by the exact rustc it wraps, and the published
+        # crate is the artifact that was released.
+        cargo install --locked cargo-reconverge --version "$INPUT_RECONVERGE_VERSION"
+        cargo install --locked reconverge-driver --version "$INPUT_RECONVERGE_VERSION"
 
     - name: Install launchbound
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
         ROOT: ${{ runner.temp }}/launchbound
+        # Without this, a rust-toolchain.toml in the consumer's checkout
+        # (the step's cwd) would hijack the install.
+        RUSTUP_TOOLCHAIN: ${{ inputs.toolchain }}
       run: |
         set -euo pipefail
         # From crates.io, not from this checkout: the published crate is the
@@ -145,9 +156,12 @@ runs:
         out="$RUNNER_TEMP/prune.json"
         code=0
         "$ROOT/bin/launchbound" prune "$INPUT_KERNEL" --cc "$INPUT_CC" --json > "$out" || code=$?
-        if [ "$code" -ne 0 ] && [ ! -s "$out" ]; then
-          echo "::error::launchbound prune failed (exit $code) with no gate record"
-          exit "$code"
+        # A gate record must parse and be non-empty, or the prune failure is
+        # the story — never mask it behind a Python traceback.
+        if ! python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d and d[0]['candidates']" "$out" 2>/dev/null; then
+          echo "::error::launchbound prune produced no usable gate record (exit $code)"
+          sed -n '1,20p' "$out" || true
+          exit 1
         fi
         python3 - "$out" >> "$GITHUB_OUTPUT" <<'PY'
         import json, sys, collections

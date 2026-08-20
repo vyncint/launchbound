@@ -17,7 +17,7 @@ Measured 2026-08-20.
 | pinned toolchain | `nightly-2026-04-03` (`rustc 1.96.0-nightly (55e86c996 2026-04-02)`) |
 | reconverge | `cargo-reconverge 0.1.11` (built at `~/Projects/reconverge/target/release`) |
 | cuda-oxide | checkout `50d07314eb8b7d5ec821ba02b0048a753c20dd4e` — the tree synced to the box (the box AMI's own stale clone reports `e28248c1`, but `./gpu sync` replaces the working tree and excludes `.git`, so the synced tree is what compiled) |
-| subject kernels | `s0-reduce` (device-only lib crate, dep `cuda-device` only, containing the §2.2 known-flip reduction); cuda-oxide examples `vecadd` (small) and `tiled_gemm` (large) |
+| subject kernels | `s0-reduce` (device-only lib crate, dep `cuda-device` only, containing the README's known-flip reduction); cuda-oxide examples `vecadd` (small) and `tiled_gemm` (large) |
 | evidence logs | `~/Projects/cuda-oxide/.gpu-evidence/20260820T{071248,071807,071959}Z.log` |
 
 ## Cost (a): `cargo reconverge check --strict` per candidate — tier 0, $0
@@ -90,8 +90,8 @@ prune : compile : benchmark  ≈  0.08 s : 1.2–1.6 s : 1.3 s   ≈  1 : 15–2
 
 - **Pruning before compiling is confirmed** — a pruned candidate costs 5%
   of a compiled one, and $0 instead of the box's hourly rate at benchmark
-  time. The §3.1 ordering stands.
-- **Assumption overturned:** §3.1 expected compilation to *dominate the
+  time. The prune-before-compile ordering stands.
+- **Assumption overturned:** the design brief expected compilation to *dominate the
   entire search*. Steady-state it does not — per-candidate compile is ~1.2 s,
   the same order as a benchmark. What actually dominates are **one-time
   costs**: workspace first-build (1.5–4.5 min per environment), first build
@@ -103,7 +103,7 @@ prune : compile : benchmark  ≈  0.08 s : 1.2–1.6 s : 1.3 s   ≈  1 : 15–2
 - **A 30-minute budget affords roughly 1,300 measured candidates**
   (1800 s ÷ ~1.35 s/benchmark), i.e. the budget is bounded by benchmark
   process overhead, not compile time — and costs ≈ $0.18 of GPU time on the
-  A10G. At the §5.4 supply (~66 GPU-hours/month) that is ~130 such runs a
+  A10G. At the project's supply (~66 GPU-hours/month) that is ~130 such runs a
   month. Exhaustive search over spaces up to ~10³ configurations is
   therefore *affordable*; model-guided search earns its keep above that.
 - **`--cc` for this hardware is 8.6** (A10G). A verdict at `--cc 8.6` does
@@ -121,7 +121,7 @@ prune : compile : benchmark  ≈  0.08 s : 1.2–1.6 s : 1.3 s   ≈  1 : 15–2
    runners live elsewhere, or the laptop prune path does not exist.
 2. **Exit code 0 does not mean no findings.** On the known-flip kernel with
    `--strict`, reconverge emits RC001 (barrier under thread-divergent
-   control, the §2.2 finding) and RC005 (no launch contract) at `warning`
+   control, the known-flip finding) and RC005 (no launch contract) at `warning`
    confidence and exits 0. The S2 gate must parse `findings.v1`; exit codes
    alone are only usable for the exit-2 hard stop.
 

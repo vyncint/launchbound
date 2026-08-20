@@ -129,7 +129,7 @@ enum Command {
         /// Wall-clock budget, e.g. 30m, 90s, 1h. Honoured, resumably.
         #[arg(long)]
         budget: Option<String>,
-        /// Run directory (default runs/<kernel>-<backend>).
+        /// Run directory (default `runs/<kernel>-<backend>`).
         #[arg(long)]
         out: Option<PathBuf>,
         /// Search order for measured backends.

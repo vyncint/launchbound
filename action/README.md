@@ -34,7 +34,7 @@ jobs:
 
       - name: Safety gate
         id: gate
-        uses: vyncint/launchbound/action@v1.0.1
+        uses: vyncint/launchbound/action@v1
         with:
           kernel: myrepo/kernels/my-reduction
           cc: "8.6"          # the part you will actually run on
@@ -63,7 +63,7 @@ the gate specializes per candidate.
 | `cc` | — | target compute capability, e.g. `"8.6"` (required; verdicts do not transfer across parts) |
 | `fail-on` | `tool-error` | `never`, `refused`, or `tool-error` |
 | `version` | `latest` | launchbound-cli release to install |
-| `reconverge-tag` | `v0.1.11` | reconverge to install — moves in lockstep with `toolchain` |
+| `reconverge-version` | `0.1.11` | reconverge release from crates.io — moves in lockstep with `toolchain` |
 | `toolchain` | `nightly-2026-04-03` | the nightly that built that reconverge |
 | `summary` | `"true"` | write the verdict table to the job summary |
 
@@ -73,6 +73,15 @@ the gate specializes per candidate.
 (`admitted`, `caveats`, `refused`, `tool-errors`), and `json` — the full
 gate record with rule IDs and source spans, for anything the counts miss.
 
+## The toolchain contract
+
+The gate compiles and analyzes your kernel **under the action's
+`toolchain` input, not your repository's `rust-toolchain.toml`** — that is
+inherent to reconverge being a rustc driver that must pair with one exact
+nightly. If your kernel needs a different nightly, pass a matching
+`toolchain`/`reconverge-version` pair; changing one without the other
+fails at install time.
+
 ## Honesty notes
 
 A clean gate is **not a proof of correctness** — the gate inherits
@@ -80,5 +89,5 @@ reconverge's documented limits, and the launch-shape classifier recognizes
 the measured `warp_id()` family (see
 [docs/LIMITATIONS.md](../docs/LIMITATIONS.md)). The gate covers CUDA
 kernels only; there is no MSL analyzer, so Metal code is not checked. The
-first run installs reconverge from source (a few minutes); nothing is
-cached, so the gate can never be stale, poisoned, or the wrong version.
+first run builds reconverge from its crates.io release (a few minutes);
+nothing is cached, so the gate can never be stale, poisoned, or the wrong version.

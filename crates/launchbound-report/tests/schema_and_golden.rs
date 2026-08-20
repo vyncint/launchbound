@@ -147,6 +147,9 @@ fn metal_reports_cannot_omit_the_no_gate_notice() {
     let run = RunDir::load(&dir).unwrap();
     let report = build_report(&run).unwrap();
     assert_eq!(report.convergence_gate, "none");
+    // No results.json in this run dir: the report must say `unmeasured`,
+    // never `measured` (docs/LIMITATIONS.md).
+    assert_eq!(report.measurement_kind, "unmeasured");
     let text = render_text(&report);
     assert!(
         text.contains("NO convergence gate exists on the Metal path"),

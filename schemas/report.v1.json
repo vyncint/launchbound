@@ -25,7 +25,8 @@
     "measurement_kind": {
       "enum": [
         "measured",
-        "estimated"
+        "estimated",
+        "unmeasured"
       ]
     },
     "device": {
