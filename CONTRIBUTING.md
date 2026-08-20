@@ -28,7 +28,7 @@ wraps — and `cuda-oxide` requires the same pin. A bump is its own commit,
 never mixed with a behaviour change, and re-runs the affected stage gates.
 The scheduled `pins.yml` workflow reports upstream movement by opening an
 issue; it never bumps anything. Current pins: nightly-2026-04-03,
-cuda-oxide 50d07314, reconverge v0.1.11.
+cuda-oxide 50d07314, reconverge 0.1.11 (installed from crates.io).
 
 ## Commit requirements
 
@@ -65,6 +65,18 @@ is what the DCO trailer means. CI (`no-ai-attribution.yml`) enforces this.
   `.gpu-evidence` log. Never round in a favourable direction.
 - A model-derived number is labelled `estimated` everywhere. Reporting an
   estimate as a measurement is a release-blocking defect.
+
+## Releasing
+
+1. Bump the workspace version (Cargo.toml, one place) and CHANGELOG.md via
+   PR; CI must be green.
+2. Tag the merge commit `vX.Y.Z` (signed) and push it. The release
+   workflow refuses to publish if the tag disagrees with Cargo.toml, and
+   publishes via crates.io Trusted Publishing (no token anywhere).
+3. Move the floating action tag: `git tag -f -s v1 && git push -f origin
+   v1`. **This step is manual and easy to forget** — `@v1` consumers keep
+   running the old action until it happens. Only move it to a commit that
+   is green on main.
 
 ## License
 

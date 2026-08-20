@@ -9,6 +9,35 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-20
+
+### Fixed
+
+- Reports with no measurements are labelled `unmeasured` instead of
+  `measured` (schema gains the value; a run directory with only a gate
+  record no longer misstates itself).
+- The release workflow refuses to publish when the pushed tag disagrees
+  with the workspace version, reads the version deterministically, and
+  warns loudly on manual dispatch; the trigger glob is now defense-in-depth
+  rather than the only barrier.
+- Every step of the GitHub Action pins `RUSTUP_TOOLCHAIN`, so a
+  rust-toolchain.toml in the consumer's checkout can no longer hijack the
+  launchbound install or the gate; the toolchain contract (the gate builds
+  your kernel under the action's toolchain) is documented. A truncated or
+  empty gate record now surfaces the prune failure instead of a parser
+  traceback.
+- The lockstep pins are written once per workflow (env), the pin-watch
+  issue names every site a bump must touch, CONTRIBUTING gains the release
+  checklist (including the easy-to-forget floating-v1 move), and the
+  action README references the floating tag.
+- rustdoc warnings and leftover internal section references cleaned up.
+
+### Changed
+
+- reconverge (cargo-reconverge + reconverge-driver) installs from its
+  crates.io releases instead of the git tag, in both the action and
+  prune.yml; the action input renames to `reconverge-version`.
+
 ## [1.0.1] - 2026-08-20
 
 ### Added

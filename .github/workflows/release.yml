@@ -49,7 +49,19 @@ jobs:
         run: |
           set -euo pipefail
           version=$(cargo metadata --format-version 1 --no-deps \
-            | python3 -c "import json,sys; print(json.load(sys.stdin)['packages'][0]['version'])")
+            | python3 -c "import json,sys; print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='launchbound-cli'))")
+          # The tag is the contract: on a tag push, refuse to publish a
+          # manifest that disagrees with it. This is the real barrier — the
+          # trigger glob is only defense-in-depth (GitHub's `*` matches any
+          # characters, so v1.2.3-rc1 style tags still trigger).
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version — refusing to publish"
+              exit 1
+            fi
+          else
+            echo "::warning::manual dispatch publishes main's Cargo.toml version ($version); versions already on crates.io are skipped"
+          fi
           echo "publishing version $version"
           for crate in \
               launchbound-space \

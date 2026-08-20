@@ -53,4 +53,4 @@ jobs:
             exit 0
           fi
 
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$(printf 'Weekly pin watch found upstream movement:\n\n%s\nPolicy (CONTRIBUTING.md): the nightly, cuda-oxide, and reconverge pins move together or not at all. A bump is its own commit with its own gate re-run. This workflow never bumps — a human decides.' "$drift")"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$(printf 'Weekly pin watch found upstream movement:\n\n%s\nPolicy (CONTRIBUTING.md): the nightly, cuda-oxide, and reconverge pins move together or not at all. A bump is its own commit with its own gate re-run, touching EVERY site: rust-toolchain.toml, .github/workflows/pins.yml (env), .github/workflows/prune.yml (env), action/action.yml (input defaults), action/README.md, and CONTRIBUTING.md. This workflow never bumps — a human decides.' "$drift")"

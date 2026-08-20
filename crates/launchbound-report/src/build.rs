@@ -173,7 +173,13 @@ pub fn build_report(run: &RunDir) -> Result<Report, ReportError> {
         schema: "report.v1".into(),
         kernel,
         gate_cc,
-        measurement_kind: "measured".into(),
+        // A report with no measurements must say so — labelling it
+        // `measured` would be the exact dishonesty §1.9 forbids.
+        measurement_kind: if run.results.is_some() {
+            "measured".into()
+        } else {
+            "unmeasured".into()
+        },
         convergence_gate,
         device: run.results.as_ref().map(|r| DeviceInfo {
             name: r.device_name.clone(),

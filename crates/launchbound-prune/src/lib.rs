@@ -2,7 +2,7 @@
 //!
 //! The decision rule lives in [`decide`] and is specified in
 //! `docs/SAFETY.md`. It is a pure function; the impure parts (scratch
-//! copies, process invocation) live in [`runner`].
+//! copies, process invocation) live in the runner module.
 
 mod decide;
 mod findings;

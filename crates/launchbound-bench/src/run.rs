@@ -39,7 +39,7 @@ pub struct Results {
     pub driver_version: String,
     pub candidates: Vec<CandidateResult>,
     pub total_gpu_seconds: f64,
-    /// Strategy that produced the visiting order (exhaustive|random:<seed>).
+    /// Strategy that produced the visiting order (`exhaustive` | `random:<seed>`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub strategy: Option<String>,
     /// True when the sweep stopped because the wall budget ran out.

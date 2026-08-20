@@ -20,7 +20,7 @@ members = [
 exclude = ["corpus"]
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 # MSRV for crates that do not require the pinned nightly (CONTRIBUTING.md);
 # set by ratatui 0.30. The analysis and compile paths require
@@ -33,14 +33,14 @@ keywords = ["cuda", "gpu", "autotuner", "convergence", "kernel"]
 categories = ["development-tools", "development-tools::profiling"]
 
 [workspace.dependencies]
-launchbound-space = { path = "crates/launchbound-space", version = "1.0.1" }
-launchbound-prune = { path = "crates/launchbound-prune", version = "1.0.1" }
-launchbound-build = { path = "crates/launchbound-build", version = "1.0.1" }
-launchbound-bench = { path = "crates/launchbound-bench", version = "1.0.1" }
-launchbound-report = { path = "crates/launchbound-report", version = "1.0.1" }
-launchbound-search = { path = "crates/launchbound-search", version = "1.0.1" }
-launchbound-model = { path = "crates/launchbound-model", version = "1.0.1" }
-launchbound-metal = { path = "crates/launchbound-metal", version = "1.0.1" }
+launchbound-space = { path = "crates/launchbound-space", version = "1.0.2" }
+launchbound-prune = { path = "crates/launchbound-prune", version = "1.0.2" }
+launchbound-build = { path = "crates/launchbound-build", version = "1.0.2" }
+launchbound-bench = { path = "crates/launchbound-bench", version = "1.0.2" }
+launchbound-report = { path = "crates/launchbound-report", version = "1.0.2" }
+launchbound-search = { path = "crates/launchbound-search", version = "1.0.2" }
+launchbound-model = { path = "crates/launchbound-model", version = "1.0.2" }
+launchbound-metal = { path = "crates/launchbound-metal", version = "1.0.2" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

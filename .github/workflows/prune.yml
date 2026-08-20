@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# The lockstep pin pair, written once. A pin bump touches this block,
+# rust-toolchain.toml, and the action defaults (action/action.yml) — the
+# pins.yml issue body lists every site.
+env:
+  PINNED_TOOLCHAIN: nightly-2026-04-03
+  RECONVERGE_VERSION: "0.1.11"
+
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -37,15 +44,13 @@ jobs:
           path: |
             ~/.cargo/bin/cargo-reconverge
             ~/.cargo/bin/reconverge-driver
-          key: cargo-reconverge-v0.1.11-${{ runner.os }}-v2
-      - name: Install pinned cargo-reconverge + driver
+          key: cargo-reconverge-${{ env.RECONVERGE_VERSION }}-${{ env.PINNED_TOOLCHAIN }}-${{ runner.os }}
+      - name: Install pinned cargo-reconverge + driver from crates.io
         if: steps.cache-reconverge.outputs.cache-hit != 'true'
         run: |
-          rustup component add rustc-dev llvm-tools rust-src --toolchain nightly-2026-04-03
-          cargo +nightly-2026-04-03 install --git https://github.com/vyncint/reconverge \
-            --tag v0.1.11 cargo-reconverge
-          cargo +nightly-2026-04-03 install --git https://github.com/vyncint/reconverge \
-            --tag v0.1.11 reconverge-driver
+          rustup component add rustc-dev llvm-tools rust-src --toolchain "$PINNED_TOOLCHAIN"
+          cargo "+$PINNED_TOOLCHAIN" install --locked cargo-reconverge --version "$RECONVERGE_VERSION"
+          cargo "+$PINNED_TOOLCHAIN" install --locked reconverge-driver --version "$RECONVERGE_VERSION"
       - uses: taiki-e/install-action@v2
         with:
           tool: just
