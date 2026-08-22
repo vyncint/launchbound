@@ -99,3 +99,79 @@ jobs:
               fi
             done
           done
+
+  # Move the floating major tag to the release that was just published.
+  #
+  # The README tells users to write `vyncint/launchbound/action@v1`, so that
+  # tag is the contract for everyone who followed the documentation. It was a
+  # manual step, and a manual step in a release is a step that gets skipped:
+  # `v1` sat on 1.0.2 through both 1.1.0 and 1.2.0, so every consumer on the
+  # documented ref kept getting an action pinned to reconverge 0.1.11 while
+  # 1.2.0's entire subject was moving that pin to 0.3.0.
+  #
+  # Runs only after a successful publish, and only for a tag push, so the
+  # floating tag can never point at a release that did not reach crates.io.
+  # The trigger filter above requires three numeric components, so pushing
+  # `v1` here cannot re-enter this workflow.
+  float-major-tag:
+    needs: publish
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # moves refs/tags/vN
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Point vN at ${{ github.ref_name }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          major="v${TAG#v}"
+          major="${major%%.*}"
+          case "$major" in
+            v[0-9]*) ;;
+            *) echo "::error::cannot derive a major tag from '$TAG'"; exit 1 ;;
+          esac
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$major" "$TAG^{commit}"
+          git push -f origin "refs/tags/$major"
+          echo "$major now points at $TAG ($(git rev-parse --short "$TAG^{commit}"))"
+
+  # Tell the repository that tests this tool against real kernels that a new
+  # version exists, so the deep run happens now rather than at its next
+  # scheduled tick.
+  #
+  # Best-effort by design. launchbound-action-demo resolves the newest
+  # published launchbound-cli from crates.io on a schedule of its own, so a
+  # dispatch that never arrives -- an expired token, a release cut by hand --
+  # costs latency and nothing else. This job never fails the release: a
+  # published crate is published whether or not the notification landed.
+  #
+  # Needs a PAT with `contents: write` on launchbound-action-demo, stored as
+  # TESTING_REPO_DISPATCH_TOKEN. Without it the job says so and exits clean.
+  notify-testing-repo:
+    name: notify-testing-repo
+    needs: publish
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Dispatch to launchbound-action-demo
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.TESTING_REPO_DISPATCH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::notice::TESTING_REPO_DISPATCH_TOKEN is not set; launchbound-action-demo will pick this up on its own schedule instead"
+            exit 0
+          fi
+          gh api repos/vyncint/launchbound-action-demo/dispatches \
+            -f event_type=tool-published \
+            -F "client_payload[version]=${TAG#v}" \
+            && echo "dispatched tool-published to launchbound-action-demo" \
+            || echo "::warning::could not dispatch to launchbound-action-demo; it will pick this up on its own schedule"
