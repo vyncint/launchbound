@@ -9,6 +9,8 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-22
+
 ### Added
 
 - **The overview shows the field, not just the winner.** Under the chosen
@@ -39,6 +41,30 @@ change measured timings are marked `bench:`.
   is a fix that matters here — `openpty` is now retried when the machine is
   briefly out of PTY devices, which macOS is whenever a suite runs one test
   per core.
+
+### CI
+
+- **The stress workflow gained a flake hunt.** The existing gate is unchanged —
+  the TUI suite once per OS on every push and pull request. The hunt runs the
+  same suite many times over, split across five machines that each use a
+  different `--test-threads`, on dispatch or weekly. Five machines because a
+  race that only loses on a slow runner gets five rolls rather than one; five
+  concurrencies because that is the axis a PTY suite's faults live on, and
+  running one point five times only samples that point harder.
+- **A published-package check**, at release and weekly: `cargo install
+  launchbound-cli` into a clean directory from crates.io, then real work with
+  no GPU, no network and no checkout — enumerating a config space whose
+  constraint rules out exactly one of six pairs. It is the only check here
+  that can fail without anybody touching the repository, because `cargo
+  install` resolves dependencies fresh where CI resolves against the lockfile.
+- **The gate job no longer caches the analyzer.** It cached
+  `cargo-reconverge` and `reconverge-driver` and skipped the install on a hit;
+  a cached binary is not evidence that the gate holds against the *published*
+  analyzer. Nothing in this repository's CI or its action caches anything now.
+- **Squash merges no longer fail the DCO check.** GitHub rewrites a
+  web-flow squash commit's author email after the sign-off is written, so the
+  exact match the check required was impossible by construction. Such commits
+  must still carry a sign-off; every other rule is unchanged.
 
 ## [1.0.2] - 2026-08-20
 
