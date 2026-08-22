@@ -134,7 +134,9 @@ launchbound prune  <kernel> [--json]                  # reconverge pass only —
 launchbound tune   <kernel> [--budget 30m] [--backend cuda|metal|model]
 launchbound report <run> [--json] [--rejected]        # includes refused-but-faster configs
 launchbound apply  <run>                              # emit the cuda-oxide policy specialization
-launchbound tui
+launchbound tui    <run>                              # the run in four views: the chosen
+                                                      # configuration and the field it beat,
+                                                      # the ranking, the refusals, the progress
 ```
 
 Exit codes: `0` a safe configuration was found; `1` the fastest candidates

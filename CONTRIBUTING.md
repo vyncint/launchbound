@@ -46,6 +46,16 @@ Treat `git commit -sS` as the only spelling. Fix a missed sign-off with
 `git commit --amend -s --no-edit`, or a branch with
 `git rebase --signoff main`.
 
+One exception, and it is GitHub's rather than ours: when a pull request is
+**squash-merged through the web UI**, GitHub rewrites the squash commit's
+author email to the merging account's address — chosen *after* the sign-off
+was written, so an exact match is impossible by construction. The check
+therefore requires such a commit (committer `noreply@github.com`) to carry a
+`Signed-off-by` trailer, without matching it against the author. The commits
+that went into the pull request were already checked, address and all, on the
+branch. Everything else in the policy — no AI attribution, no bot identities —
+applies to merge commits unchanged.
+
 ## AI tooling policy
 
 You may use whatever tools you like to write your contribution. What lands in
