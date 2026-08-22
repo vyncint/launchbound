@@ -9,6 +9,15 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Changed
+
+- **termlens 0.5 → 0.6** for the TUI test harness. No source change was
+  needed: the only breaking change in 0.6 is `GraphicsSeen` becoming `Clone`
+  rather than `Copy`, and this suite asserts on text. What the upgrade buys
+  is a fix that matters here — `openpty` is now retried when the machine is
+  briefly out of PTY devices, which macOS is whenever a suite runs one test
+  per core.
+
 ## [1.0.2] - 2026-08-20
 
 ### Fixed
