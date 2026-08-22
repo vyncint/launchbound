@@ -9,8 +9,30 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Added
+
+- **The overview shows the field, not just the winner.** Under the chosen
+  configuration it now lists every measured candidate fastest-first, with what
+  each costs relative to the fastest. An autotuner's output is not a
+  configuration, it is the claim that the configuration is *worth choosing*,
+  and that claim is unreadable without the alternatives: a field inside a
+  percent says the tuning did not matter, one spanning 4x says it did.
+
+  The percentage is anchored on the **fastest** measured candidate rather than
+  on the chosen one, deliberately. Where a refused configuration measured
+  faster — the case the overview already warns about in bold — anchoring on
+  the chosen would bury the number that matters. On the `reduce-flip` fixture
+  it now reads plainly: the disqualified candidate is fastest and the safe
+  choice costs 90.5%.
+
+  The list is the head of view 2's, from one shared ordering, so the two
+  cannot disagree. Where it does not fit, it truncates and says how many more
+  view 2 holds.
+
 ### Changed
 
+- **The overview fills the pane it was given.** It drew four lines into a
+  twenty-five-row box; the rest was blank.
 - **termlens 0.5 → 0.6** for the TUI test harness. No source change was
   needed: the only breaking change in 0.6 is `GraphicsSeen` becoming `Clone`
   rather than `Copy`, and this suite asserts on text. What the upgrade buys

@@ -8,17 +8,17 @@ launchbound — reduce-flip · gate cc 8.6 · measured · NVIDIA A10G
 │                                                                                                            │
 │GPU-seconds consumed: 25.5                                                                                  │
 │                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
+│the field, fastest first                                                                                    │
+│x block_x=64 tile=128 unroll=0    0.0210 ms                                                                 │
+│» block_x=32 tile=512 unroll=4    0.0400 ms  +90.5%                                                         │
+│  block_x=32 tile=128 unroll=0    0.0430 ms  +104.8%                                                        │
+│  block_x=32 tile=128 unroll=2    0.0460 ms  +119.0%                                                        │
+│  block_x=32 tile=128 unroll=4    0.0490 ms  +133.3%                                                        │
+│  block_x=32 tile=256 unroll=0    0.0520 ms  +147.6%                                                        │
+│  block_x=32 tile=256 unroll=2    0.0550 ms  +161.9%                                                        │
+│  block_x=32 tile=256 unroll=4    0.0580 ms  +176.2%                                                        │
+│  block_x=32 tile=512 unroll=0    0.0610 ms  +190.5%                                                        │
+│  block_x=32 tile=512 unroll=2    0.0640 ms  +204.8%                                                        │
 │                                                                                                            │
 │                                                                                                            │
 │                                                                                                            │
