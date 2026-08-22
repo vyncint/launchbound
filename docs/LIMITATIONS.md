@@ -2,11 +2,11 @@
 
 A tool that overstates its reach is worse than one that does less. These are
 launchbound's, with numbers where we have them. Everything here was true on
-2026-08-20 against the pins in rust-toolchain.toml and CONTRIBUTING.md.
+2026-08-22 against the pins in rust-toolchain.toml and CONTRIBUTING.md.
 
 ## The gate inherits reconverge's limits, wholesale
 
-A clean gate is **not a proof of correctness**. `reconverge` (v0.1.11) is
+A clean gate is **not a proof of correctness**. `reconverge` (v0.3.0) is
 summary-based and interprocedural, handles reducible control flow only,
 cannot evaluate non-literal masks, and puts data races entirely out of
 scope. Its own documentation is the authority; launchbound adds no analysis

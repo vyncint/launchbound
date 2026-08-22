@@ -9,6 +9,37 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-22
+
+### Changed
+
+- **The safety gate now pins `reconverge` 0.3.0**, up from 0.1.11 — two minor
+  versions of analyzer the gate was not getting. The pin moves in four places:
+  the corpus workflow, the Action's `reconverge-version` default, and the two
+  documents that name it.
+
+  **The gate admits exactly the same set.** A newer analyzer can change what
+  the gate refuses, which is a change in product behaviour rather than a
+  dependency bump, so the corpus was re-run under both versions on the same
+  toolchain and compared: **93 clean, 8 refused, 0 caveats, 0 tool errors**,
+  and the two runs are **byte-identical** — same candidate hashes, same
+  `REFUSED RC001` lines, same reasons. The eight refusals are `reduce-flip`
+  above one warp, which is the corpus's known flip and the behaviour the gate
+  exists to produce. The measurement is recorded in
+  [docs/research-baseline.md](docs/research-baseline.md#analyzer-equivalence-0111--030).
+
+  No toolchain change was needed: launchbound and reconverge 0.3.0 already pin
+  the same `nightly-2026-04-03`, so the rule that the analyzer and the
+  toolchain move together is satisfied without moving either.
+
+  What this does *not* establish is general equivalence. reconverge gained
+  multi-warp replay, bounded inlining and unmasked warp-wrapper analysis
+  between these versions; a kernel exercising those paths could be decided
+  differently. Six kernels are the evidence, and six kernels are what they are.
+
+- `docs/LIMITATIONS.md` now describes the limits of the analyzer the gate
+  actually runs, and carries the date it was re-checked.
+
 ## [1.1.0] - 2026-08-22
 
 ### Added

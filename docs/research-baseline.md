@@ -15,7 +15,7 @@ Measured 2026-08-20.
 | tier-1 guest | Apple `container` 1.2.0, **native arm64** Ubuntu 24.04 (no Docker, no Rosetta — operator requirement), CUDA toolkit 13.2 (sbsa), LLVM 21.1.8, container `cuda-oxide-dev` |
 | tier-2 box | AWS `g5.xlarge` spot @ **$0.364/hr**, us-east-2c, **NVIDIA A10G** (`sm_86`, cc 8.6), driver 595.71.05, CUDA 13.2 (V13.2.51), LLVM 21.1.8 — chosen over the T4 by the operator; barely above T4 spot ($0.335/hr) |
 | pinned toolchain | `nightly-2026-04-03` (`rustc 1.96.0-nightly (55e86c996 2026-04-02)`) |
-| reconverge | `cargo-reconverge 0.1.11` (built at `~/Projects/reconverge/target/release`) |
+| reconverge | `cargo-reconverge 0.1.11` (built at `~/Projects/reconverge/target/release`) — **the version these measurements were taken with**; the gate now pins 0.3.0, which was verified to admit the identical set (see below) |
 | cuda-oxide | checkout `50d07314eb8b7d5ec821ba02b0048a753c20dd4e` — the tree synced to the box (the box AMI's own stale clone reports `e28248c1`, but `./gpu sync` replaces the working tree and excludes `.git`, so the synced tree is what compiled) |
 | subject kernels | `s0-reduce` (device-only lib crate, dep `cuda-device` only, containing the README's known-flip reduction); cuda-oxide examples `vecadd` (small) and `tiled_gemm` (large) |
 | evidence logs | `~/Projects/cuda-oxide/.gpu-evidence/20260820T{071248,071807,071959}Z.log` |
@@ -131,3 +131,44 @@ Findings on the subject kernel (`--strict`, `--cc 7.5`):
 |---|---|---|
 | RC005 | warning | kernel `reduce_flip` calls `index_1d()` without a launch contract |
 | RC001 | warning | kernel `reduce_flip` may execute `sync_threads()` under thread-divergent control |
+
+## Analyzer equivalence: 0.1.11 → 0.3.0
+
+The gate's pinned analyzer moved from `cargo-reconverge` 0.1.11 to 0.3.0. A
+newer analyzer can change **what the gate admits**, which is a change in
+product behaviour rather than a dependency bump — so the corpus was re-run
+under both, on the same toolchain, and compared.
+
+Measured 2026-08-22 on `nightly-2026-04-03`, cuda-oxide `50d07314`, tier 0
+(no GPU):
+
+```console
+$ cargo run -q -p launchbound-cli -- prune --cc 8.6
+```
+
+| kernel | clean | caveats | refused | tool errors |
+|---|---|---|---|---|
+| histogram | 12 | 0 | 0 | 0 |
+| matmul-tiled | 18 | 0 | 0 | 0 |
+| reduce-flip | 3 | 0 | **8** | 0 |
+| reduce-stable | 11 | 0 | 0 | 0 |
+| scan-block | 4 | 0 | 0 | 0 |
+| stencil-1d | 45 | 0 | 0 | 0 |
+| **total** | **93** | **0** | **8** | **0** |
+
+**The two runs are byte-identical** — not merely equal in the totals, but the
+same candidate hashes, the same `REFUSED RC001` lines, the same reasons. The
+eight refusals are the `reduce-flip` candidates at block sizes above one warp,
+which is the corpus's known flip and the behaviour the gate exists to produce.
+
+The gate tests pass under 0.3.0 unchanged, including
+`known_flip_kernel_disqualifies_above_one_warp` and
+`known_stable_kernel_disqualifies_nothing`.
+
+**What this does and does not establish.** It establishes that on *this*
+corpus, at cc 8.6, the two analyzers decide identically — so the bump carries
+no behaviour change this project can observe. It does not establish that they
+are equivalent in general: reconverge gained multi-warp replay, bounded
+inlining and unmasked warp-wrapper analysis between these versions, and a
+kernel exercising those paths could well be decided differently. The corpus is
+the evidence, and the corpus is six kernels.
