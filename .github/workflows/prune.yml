@@ -36,17 +36,15 @@ jobs:
       - name: Install pinned toolchain
         working-directory: launchbound
         run: rustup show
-      - name: Cache cargo-reconverge
-        id: cache-reconverge
-        uses: actions/cache@v4
-        with:
-          # The wrapper is nothing without the rustc driver beside it.
-          path: |
-            ~/.cargo/bin/cargo-reconverge
-            ~/.cargo/bin/reconverge-driver
-          key: cargo-reconverge-${{ env.RECONVERGE_VERSION }}-${{ env.PINNED_TOOLCHAIN }}-${{ runner.os }}
+      # Installed every run, never restored from a cache. This job exists to
+      # prove the safety gate holds against the *published* analyzer, and a
+      # cached binary is not evidence of that: it is evidence about whatever
+      # crates.io served the day the cache was filled. The action this
+      # repository ships makes the same promise in the same words — "from
+      # crates.io, built here, never a cached binary" — and a gate that
+      # cannot be trusted to be current is worth less than the minutes it
+      # saves.
       - name: Install pinned cargo-reconverge + driver from crates.io
-        if: steps.cache-reconverge.outputs.cache-hit != 'true'
         run: |
           rustup component add rustc-dev llvm-tools rust-src --toolchain "$PINNED_TOOLCHAIN"
           cargo "+$PINNED_TOOLCHAIN" install --locked cargo-reconverge --version "$RECONVERGE_VERSION"
