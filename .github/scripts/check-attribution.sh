@@ -15,6 +15,7 @@ while read -r sha; do
     author_name=$(git log -1 --format='%an' "$sha")
     author_email=$(git log -1 --format='%ae' "$sha")
     committer=$(git log -1 --format='%cn <%ce>' "$sha")
+    committer_email=$(git log -1 --format='%ce' "$sha")
 
     if grep -iqE "$AI_PATTERN" <<<"$msg"; then
         echo "::error::$sha: AI co-author trailer in commit message"
@@ -36,7 +37,20 @@ while read -r sha; do
         echo "::error::$sha: bot/vendor committer identity: $committer"
         fail=1
     fi
-    if ! grep -qF "Signed-off-by: $author_name <$author_email>" <<<"$msg"; then
+    # GitHub's own squash and merge commits (committer noreply@github.com)
+    # rewrite the author email to the merging account's address, so an exact
+    # sign-off==author match is impossible by construction: the sign-off was
+    # written before GitHub chose the author. The commits that went into the
+    # pull request were already checked by this script on the branch, so what
+    # is left to require of the merge commit is that a sign-off is present at
+    # all — the certification, without the address it cannot control.
+    if [ "$committer_email" = "noreply@github.com" ]; then
+        if ! grep -qiE '^signed-off-by:' <<<"$msg"; then
+            echo "::error::$sha: merge commit carries no Signed-off-by at all"
+            echo "  subject: $(git log -1 --format='%s' "$sha")"
+            fail=1
+        fi
+    elif ! grep -qF "Signed-off-by: $author_name <$author_email>" <<<"$msg"; then
         echo "::error::$sha: missing DCO Signed-off-by matching author $author_name <$author_email>"
         fail=1
     fi
