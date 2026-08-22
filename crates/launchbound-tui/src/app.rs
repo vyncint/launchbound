@@ -145,13 +145,76 @@ fn draw_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
         "GPU-seconds consumed: {:.1}",
         r.totals.gpu_seconds
     )));
+
+    // The field, against the winner. An autotuner's result is not a
+    // configuration, it is the claim that the configuration is *worth
+    // choosing* — and that claim is unreadable without the alternatives. A
+    // field within a percent says the tuning did not matter; one spanning 4x
+    // says it did, and the overview is where that belongs. The list is the
+    // head of view 2's, so the two can never disagree.
+    let measured = measured_fastest_first(app);
+    if measured.len() > 1 {
+        // Everything the fixed lines above did not take, less the heading and
+        // the borders. The overview never scrolls, so the field is truncated
+        // rather than paged; view 2 is the whole list and says so.
+        let room = usize::from(area.height)
+            .saturating_sub(lines.len() + 3)
+            .min(measured.len());
+        if room > 1 {
+            let more = measured.len() - room;
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                if more > 0 {
+                    format!("the field, fastest first — {more} more in view 2")
+                } else {
+                    "the field, fastest first".to_string()
+                },
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+
+            let best = measured[0]
+                .summary
+                .as_ref()
+                .expect("filtered on Some")
+                .median_ms;
+            let chosen_id = r.chosen.as_ref().map(|c| c.id.as_str());
+            for candidate in measured.iter().take(room) {
+                let summary = candidate.summary.as_ref().expect("filtered on Some");
+                // Relative to the fastest, not to the chosen: when the chosen
+                // one was refused a faster rival the difference is the whole
+                // story, and anchoring on the winner would hide it.
+                let relative = if best > 0.0 && summary.median_ms > best {
+                    format!("{:+.1}%", (summary.median_ms / best - 1.0) * 100.0)
+                } else {
+                    String::new()
+                };
+                let marker = if Some(candidate.id.as_str()) == chosen_id {
+                    "»"
+                } else if candidate.verdict == "disqualified" {
+                    "x"
+                } else {
+                    " "
+                };
+                lines.push(Line::from(format!(
+                    "{marker} {:<24} {:>9.4} ms  {relative:>6}",
+                    candidate.config, summary.median_ms
+                )));
+            }
+        }
+    }
+
     frame.render_widget(
         Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title("overview")),
         area,
     );
 }
 
-fn draw_ranking(frame: &mut Frame<'_>, app: &App, area: Rect) {
+/// Every measured candidate, fastest first.
+///
+/// Shared by the overview and the ranking so the two can never disagree about
+/// what "next fastest" means — the overview shows the head of exactly the list
+/// view 2 pages through.
+fn measured_fastest_first(app: &App) -> Vec<&launchbound_report::CandidateReport> {
     let mut measured: Vec<_> = app
         .report
         .candidates
@@ -162,6 +225,11 @@ fn draw_ranking(frame: &mut Frame<'_>, app: &App, area: Rect) {
         let (sa, sb) = (a.summary.as_ref().unwrap(), b.summary.as_ref().unwrap());
         sa.median_ms.partial_cmp(&sb.median_ms).expect("no NaN")
     });
+    measured
+}
+
+fn draw_ranking(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let measured = measured_fastest_first(app);
     let chosen_id = app.report.chosen.as_ref().map(|c| c.id.as_str());
     let items: Vec<ListItem<'_>> = measured
         .iter()
