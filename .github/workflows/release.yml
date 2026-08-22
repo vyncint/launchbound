@@ -99,3 +99,43 @@ jobs:
               fi
             done
           done
+
+  # Move the floating major tag to the release that was just published.
+  #
+  # The README tells users to write `vyncint/launchbound/action@v1`, so that
+  # tag is the contract for everyone who followed the documentation. It was a
+  # manual step, and a manual step in a release is a step that gets skipped:
+  # `v1` sat on 1.0.2 through both 1.1.0 and 1.2.0, so every consumer on the
+  # documented ref kept getting an action pinned to reconverge 0.1.11 while
+  # 1.2.0's entire subject was moving that pin to 0.3.0.
+  #
+  # Runs only after a successful publish, and only for a tag push, so the
+  # floating tag can never point at a release that did not reach crates.io.
+  # The trigger filter above requires three numeric components, so pushing
+  # `v1` here cannot re-enter this workflow.
+  float-major-tag:
+    needs: publish
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # moves refs/tags/vN
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Point vN at ${{ github.ref_name }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          major="v${TAG#v}"
+          major="${major%%.*}"
+          case "$major" in
+            v[0-9]*) ;;
+            *) echo "::error::cannot derive a major tag from '$TAG'"; exit 1 ;;
+          esac
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$major" "$TAG^{commit}"
+          git push -f origin "refs/tags/$major"
+          echo "$major now points at $TAG ($(git rev-parse --short "$TAG^{commit}"))"
