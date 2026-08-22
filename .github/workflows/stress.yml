@@ -1,14 +1,48 @@
 # S8: the termlens stress gate on both OSes. Hermetic fixtures, a real PTY,
 # no GPU anywhere.
+#
+# Two jobs, because they answer different questions.
+#
+#   * `termlens` is the gate: the TUI suite once per OS on every push and
+#     pull request. It is what stops a broken frame reaching main.
+#   * `hunt` is the flake hunter: the same suite many times over, spread
+#     across five machines that each run it at a different `--test-threads`.
+#     It is asked for, or runs weekly — never on a pull request, because it
+#     costs minutes and answers a question nobody asked at review time.
+#
+# The hunt exists because a PTY suite is asynchronous by construction and its
+# faults are the once-in-fifty kind. Five machines are five different runners,
+# so a race that only loses on a slow one gets five rolls rather than one, and
+# five concurrencies cover both ends of the axis those faults live on: at one
+# thread nothing contends and every child starts and exits as fast as the
+# machine allows, at sixteen the PTYs open and close on top of each other.
+#
+# `stress_100_runs_at_80x24` is skipped in the hunt. It is the same idea done
+# in-process, and running it inside an outer loop would multiply a hundred
+# spawns by twenty for no new information.
 name: stress
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Suite iterations per OS, split across the shards
+        required: false
+        default: "100"
+  schedule:
+    - cron: "29 6 * * 1" # Mondays
 
 permissions:
   contents: read
+
+# One hunt per ref at a time: a second dispatch queues rather than cancelling
+# a half-finished measurement, which would tell nobody anything.
+concurrency:
+  group: stress-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   termlens:
@@ -22,3 +56,56 @@ jobs:
       - name: Install pinned toolchain
         run: rustup show
       - run: cargo test -p launchbound-tui --test tui
+
+  hunt:
+    name: hunt (${{ matrix.os }}, ${{ matrix.threads }} threads)
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    strategy:
+      # Never cancel a sibling: which OS and which concurrency a flake landed
+      # on is most of the diagnosis, and a cancelled shard reports nothing.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        threads: [1, 2, 4, 8, 16]
+        # Weighted by wall time rather than split evenly: a serial iteration
+        # costs several times a parallel one, and an even split would leave
+        # four machines idle while the first finished. Percentages of
+        # `iterations`, summing to 100.
+        include:
+          - threads: 1
+            weight: 10
+          - threads: 2
+            weight: 15
+          - threads: 4
+            weight: 25
+          - threads: 8
+            weight: 25
+          - threads: 16
+            weight: 25
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        run: rustup show
+      # Built once, outside the loop: compiling inside it would put the
+      # compiler's own variance into the measurement.
+      - run: cargo build -p launchbound-tui --release --all-targets
+      - name: Run the suite repeatedly
+        env:
+          ITERS: ${{ inputs.iterations || '100' }}
+          THREADS: ${{ matrix.threads }}
+          WEIGHT: ${{ matrix.weight }}
+        run: |
+          per=$(( WEIGHT * ITERS / 100 ))
+          # A small `iterations` must still exercise every concurrency, or a
+          # quick ten-iteration check would silently skip the serial shard.
+          if [ "$per" -lt 1 ]; then per=1; fi
+          echo "${THREADS} thread(s): ${per} iterations of ${ITERS}"
+          for i in $(seq "$per"); do
+            echo "::group::${THREADS} threads, iteration ${i}/${per}"
+            cargo test -p launchbound-tui --release --test tui \
+              -- --test-threads="$THREADS" --skip stress_100_runs \
+              || { echo "::error::suite flaked at ${THREADS} thread(s), iteration ${i}/${per}"; exit 1; }
+            echo "::endgroup::"
+          done
