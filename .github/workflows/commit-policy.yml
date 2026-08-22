@@ -1,7 +1,7 @@
 # Repo policy (CONTRIBUTING.md): zero AI attribution anywhere, plus DCO
 # sign-off on every commit. This checks the full history — the repo is small
 # enough that scanning everything is cheaper than getting ranges right.
-name: no-ai-attribution
+name: commit-policy
 
 on:
   push:
@@ -21,8 +21,35 @@ jobs:
           # On PRs, check the real commits — not the synthetic merge commit
           # GitHub fabricates (committer GitHub <noreply@github.com>, no DCO).
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Check commits for AI attribution and DCO sign-off
-        run: bash .github/scripts/check-attribution.sh
+      - name: Determine the commit range
+        id: range
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            range="${BASE}..${HEAD}"
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            range="$AFTER"
+          else
+            range="${BEFORE}..${AFTER}"
+          fi
+          echo "Checking range: $range"
+          echo "range=$range" >> "$GITHUB_OUTPUT"
+
+      - name: DCO sign-off
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: .github/scripts/check-dco.sh "$RANGE"
+
+      - name: No AI attribution
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: .github/scripts/check-no-ai-attribution.sh "$RANGE"
       - name: Check PR body for AI attribution
         if: github.event_name == 'pull_request'
         env:

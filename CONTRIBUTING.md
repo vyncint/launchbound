@@ -3,7 +3,14 @@
 Thanks for your interest. Issues and small PRs are welcome; large features
 are better discussed first.
 
-## Dev setup
+> **These four projects share one contributor pattern** — the same commit
+> rules, the same DCO, the same AI policy, the same CI and release shape:
+> [termlens](https://github.com/vyncint/termlens),
+> [mossaic](https://github.com/vyncint/mossaic),
+> [launchbound](https://github.com/vyncint/launchbound),
+> [reconverge](https://github.com/vyncint/reconverge). Learn it once.
+
+## 1. Dev setup
 
 The default feature set builds and tests **without any GPU, CUDA SDK, or
 Metal** — that is a hard project rule, and CI enforces it on plain GitHub
@@ -19,53 +26,11 @@ just ci                    # fmt, clippy -D warnings, tests, cargo-deny, schemas
 wrapped `cargo build`. Everything except an actual benchmark can be developed
 on a laptop.
 
-## The pin policy
+## 2. Project layout
 
-Three pins move together or not at all: the nightly in
-`rust-toolchain.toml`, the `cuda-oxide` pin, and the `reconverge` pin.
-`reconverge` is a rustc-driver tool — it must be built by the exact rustc it
-wraps — and `cuda-oxide` requires the same pin. A bump is its own commit,
-never mixed with a behaviour change, and re-runs the affected stage gates.
-The scheduled `pins.yml` workflow reports upstream movement by opening an
-issue; it never bumps anything. Current pins: nightly-2026-04-03,
-cuda-oxide 50d07314, reconverge 0.1.11 (installed from crates.io).
+See [AGENTS.md](AGENTS.md#layout).
 
-## Commit requirements
-
-Every commit needs all three of:
-
-1. **DCO sign-off** — `git commit -s`, with a `Signed-off-by:` trailer
-   matching the author.
-2. **Cryptographic signature** — `git commit -S` (SSH or GPG signing both
-   work; the signature is what "verified" means on GitHub).
-3. **Conventional Commits** — `feat:`, `fix:`, `docs:`, `test:`, `ci:`,
-   `chore:`, `refactor:`, `perf:`, plus `bench:` for a change that alters
-   measured timings. Scope optional, e.g. `feat(prune): …`.
-
-Treat `git commit -sS` as the only spelling. Fix a missed sign-off with
-`git commit --amend -s --no-edit`, or a branch with
-`git rebase --signoff main`.
-
-One exception, and it is GitHub's rather than ours: when a pull request is
-**squash-merged through the web UI**, GitHub rewrites the squash commit's
-author email to the merging account's address — chosen *after* the sign-off
-was written, so an exact match is impossible by construction. The check
-therefore requires such a commit (committer `noreply@github.com`) to carry a
-`Signed-off-by` trailer, without matching it against the author. The commits
-that went into the pull request were already checked, address and all, on the
-branch. Everything else in the policy — no AI attribution, no bot identities —
-applies to merge commits unchanged.
-
-## AI tooling policy
-
-You may use whatever tools you like to write your contribution. What lands in
-this repository carries **no AI attribution of any kind**: no
-`Co-Authored-By` naming an AI, bot or agent; no "Generated with …" lines; no
-robot emoji or watermarks in commits, PRs, comments or docs; no `*[bot]` or
-vendor noreply authors. You sign off on your commits as your own work — that
-is what the DCO trailer means. CI (`no-ai-attribution.yml`) enforces this.
-
-## Testing policy
+## 3. Testing policy
 
 - The default feature set must pass `just ci` with no GPU present.
 - Hardware-dependent tests live behind the `hardware` feature and
@@ -76,19 +41,112 @@ is what the DCO trailer means. CI (`no-ai-attribution.yml`) enforces this.
 - A model-derived number is labelled `estimated` everywhere. Reporting an
   estimate as a measurement is a release-blocking defect.
 
-## Releasing
+## 4. Commit conventions
 
-1. Bump the workspace version (Cargo.toml, one place) and CHANGELOG.md via
-   PR; CI must be green.
-2. Tag the merge commit `vX.Y.Z` (signed) and push it. The release
-   workflow refuses to publish if the tag disagrees with Cargo.toml, and
-   publishes via crates.io Trusted Publishing (no token anywhere).
-3. Move the floating action tag: `git tag -f -s v1 && git push -f origin
-   v1`. **This step is manual and easy to forget** — `@v1` consumers keep
-   running the old action until it happens. Only move it to a commit that
-   is green on main.
+We use [Conventional Commits](https://www.conventionalcommits.org/):
+`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `chore:`, `refactor:`, `perf:` —
+scope optional (`feat(prune): …`). Subject line: imperative mood,
+≤ 72 characters.
 
-## License
+## 5. Developer Certificate of Origin (DCO)
+
+Every commit must be signed off:
+
+```sh
+git commit -s
+```
+
+This appends `Signed-off-by: Your Name <you@example.com>` and certifies you
+wrote the change or otherwise have the right to submit it under the project
+license — the [Developer Certificate of Origin](https://developercertificate.org),
+the same lightweight model the Linux kernel uses. The sign-off email must
+match the commit author email; CI enforces this on every commit in a PR.
+
+**There is no CLA. DCO only.** You keep your copyright.
+
+Forgot to sign off? `git commit --amend -s` for the last commit, or
+`git rebase --signoff main` for a whole branch, then force-push.
+
+One exception, and it is GitHub's rather than ours: a pull request
+**squash-merged through the web UI** has its author email rewritten by GitHub
+*after* the sign-off was written, so an exact match is impossible by
+construction. Such a commit must carry a sign-off, but is not matched against
+an author it did not choose. The commits that went into the PR were already
+checked, address and all, on the branch.
+
+## 6. AI tooling policy
+
+**AI assistance is welcome here — use whatever helps.** Every one of these
+projects was built with it. There is an [AGENTS.md](AGENTS.md) briefing coding
+agents on the layout, the commands, and the house style.
+
+**AI attribution is not welcome.** No `Co-Authored-By` trailer naming an
+assistant, model or vendor; no "Generated with …" footer; no robot emoji; no
+bot identity as author or committer. Whoever opens the pull request is the
+author of record, takes responsibility under the DCO, and the history should
+say so — a tool cannot certify the DCO, which is the whole point of it.
+
+This is enforced, not requested: `commit-policy.yml` runs
+[`check-no-ai-attribution.sh`](.github/scripts/check-no-ai-attribution.sh) and
+[`check-dco.sh`](.github/scripts/check-dco.sh) over every commit in a pull
+request. Run them yourself first — both take a range:
+
+```sh
+.github/scripts/check-dco.sh main..HEAD
+.github/scripts/check-no-ai-attribution.sh main..HEAD
+```
+
+If a check fails, rewrite the message rather than arguing with it:
+
+```sh
+git commit --amend            # the last commit
+git rebase -i main            # several, marking each `reword`
+git push --force-with-lease
+```
+
+`.claude/settings.json` turns co-author trailers off for agents that read
+repository settings. That is a courtesy; the check in CI is the boundary.
+Contributions authored *by* an autonomous account are not accepted.
+
+## 7. PR flow
+
+- Branch from `main`; name branches `feat/…`, `fix/…`, `docs/…`, `ci/…`.
+- PRs are **squash-merged** — keep the PR title in Conventional Commit form,
+  since it becomes the commit subject on `main`. Branches are deleted on merge.
+- Required checks: `ci`, `msrv`, `check` and `gate`, plus `commit-policy` (DCO + attribution). All
+  must pass before merge; direct pushes to `main` are blocked by a ruleset.
+- **Every change lands with a test, and the test must be able to fail.** If
+  you add a guard, break it once and watch it go red before you commit.
+- **Say what you did not do.** A PR that lists what it left out and why is
+  worth more than one implying completeness. An honest gap is cheap; a false
+  claim is expensive.
+- **Contributing from a fork?** Two things are normal. On your first PR the
+  workflows wait for a maintainer to approve them — GitHub's standard
+  first-time-contributor safeguard, nothing you did wrong. And when
+  `commit-policy` fails on a fork PR it cannot post its explanatory comment
+  (fork PRs get a read-only token); the job log carries the full explanation,
+  including the offending commit and the command that fixes it.
+- Review: expect actionable review within a few days. Small, focused PRs get
+  reviewed faster. Update `CHANGELOG.md` under `[Unreleased]` for any
+  user-facing change.
+
+## 8. Release process
+
+Releases are cut by maintainers only; the checklist lives in
+[docs/RELEASING.md](docs/RELEASING.md).
+
+## 9. The pin policy
+
+Three pins move together or not at all: the nightly in
+`rust-toolchain.toml`, the `cuda-oxide` pin, and the `reconverge` pin.
+`reconverge` is a rustc-driver tool — it must be built by the exact rustc it
+wraps — and `cuda-oxide` requires the same pin. A bump is its own commit,
+never mixed with a behaviour change, and re-runs the affected stage gates.
+The scheduled `pins.yml` workflow reports upstream movement by opening an
+issue; it never bumps anything. Current pins: nightly-2026-04-03,
+cuda-oxide 50d07314, reconverge 0.1.11 (installed from crates.io).
+
+## 10. License
 
 By contributing, you agree that your contributions will be dual-licensed
 under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) without additional
