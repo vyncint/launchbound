@@ -1,0 +1,168 @@
+# What crates.io actually serves, installed the way a user installs it.
+#
+# `just ci` tests the working tree and `cargo publish` checks that each
+# archive builds. Neither answers the question a user asks: does
+# `cargo install launchbound-cli` work for somebody who has only cargo?
+# Three failures live in that gap and nowhere else.
+#
+#   * A file the build needs that never reached the archive. The workspace
+#     still compiles; the package does not, and no test here can see it
+#     because every test here has the workspace.
+#   * A **fresh dependency resolution**. CI resolves against the committed
+#     lockfile; `cargo install` does not, so a dependency's own release can
+#     break the published crate days later with nothing changed here. That is
+#     why this runs weekly and not only at publish.
+#   * The eight crates publishing in the wrong order, or one of them
+#     depending on a version of a sibling that is not on crates.io yet. That
+#     is invisible until somebody resolves the graph from the registry, which
+#     is exactly what this does.
+#
+# Nothing here checks the repository out. The version and the MSRV come from
+# the registry, because the registry is what a user gets.
+name: install
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to verify (default: the newest published)"
+        required: false
+  schedule:
+    - cron: "47 7 * * 1" # Mondays
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-${{ github.event.release.tag_name || inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: install (${{ matrix.os }}, ${{ matrix.toolchain }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        toolchain: [stable, msrv]
+        include:
+          # Stable resolves fresh, which is what a user gets and the only way
+          # a dependency's own release can be caught breaking us.
+          - toolchain: stable
+            locked: ""
+          # The MSRV promise is made against the lockfile we shipped, so that
+          # is what it is checked against.
+          - toolchain: msrv
+            locked: "--locked"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - name: Ask the registry what was published
+        id: crate
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          WANTED: ${{ inputs.version }}
+        run: |
+          api="https://crates.io/api/v1/crates/launchbound-cli"
+          agent="launchbound-install-check (github actions)"
+          version="${WANTED:-${TAG#v}}"
+          if [ -z "$version" ]; then
+            version=$(curl -sSf -H "User-Agent: $agent" "$api" | jq -r .crate.max_stable_version)
+          fi
+
+          # The release event fires the moment publishing finishes, and the
+          # index can trail it. Wait rather than fail: a flaky gate teaches
+          # people to ignore it.
+          for attempt in $(seq 30); do
+            body=$(curl -sS -H "User-Agent: $agent" "$api/$version") || body=""
+            if [ "$(printf '%s' "$body" | jq -r '.version.num // empty')" = "$version" ]; then
+              break
+            fi
+            echo "waiting for $version to appear on crates.io (${attempt}/30)"
+            sleep 10
+          done
+
+          num=$(printf '%s' "$body" | jq -r '.version.num // empty')
+          if [ "$num" != "$version" ]; then
+            echo "::error::$version never appeared on crates.io"
+            exit 1
+          fi
+          if [ "$(printf '%s' "$body" | jq -r .version.yanked)" != "false" ]; then
+            echo "::error::$version is yanked"
+            exit 1
+          fi
+          msrv=$(printf '%s' "$body" | jq -r '.version.rust_version // empty')
+          if [ -z "$msrv" ]; then
+            echo "::error::$version declares no rust-version, so its MSRV cannot be checked"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "msrv=$msrv" >> "$GITHUB_OUTPUT"
+          echo "verifying launchbound-cli $version, which declares Rust $msrv"
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: ${{ matrix.toolchain == 'msrv' && steps.crate.outputs.msrv || 'stable' }}
+      - name: cargo install, from an empty directory
+        env:
+          VERSION: ${{ steps.crate.outputs.version }}
+          LOCKED: ${{ matrix.locked }}
+        run: |
+          # An empty directory on purpose: `cargo install` from inside a
+          # checkout is a different code path from the one a user takes, and
+          # this crate's own workspace would satisfy dependencies the registry
+          # has to satisfy on its own.
+          mkdir -p "$RUNNER_TEMP/clean-room"
+          cd "$RUNNER_TEMP/clean-room"
+          # shellcheck disable=SC2086 # LOCKED is a flag or nothing
+          cargo install launchbound-cli --version "$VERSION" $LOCKED --root "$RUNNER_TEMP/installed"
+          echo "$RUNNER_TEMP/installed/bin" >> "$GITHUB_PATH"
+      - name: Run what it installed
+        env:
+          VERSION: ${{ steps.crate.outputs.version }}
+        run: |
+          cd "$RUNNER_TEMP/clean-room"
+
+          # The version the binary reports is what proves the archive under
+          # test is the archive that was published.
+          got=$(launchbound --version)
+          echo "launchbound: $got"
+          case "$got" in
+            "launchbound $VERSION") ;;
+            *) echo "::error::launchbound reports '$got', expected 'launchbound $VERSION'"; exit 1 ;;
+          esac
+
+          # Every subcommand the README promises, still there.
+          launchbound --help | tee help.txt
+          for command in space prune stage report model tune apply; do
+            grep -qE "^  $command " help.txt || {
+              echo "::error::the published CLI has no '$command' subcommand"; exit 1; }
+          done
+
+          # And one that does real work with no GPU, no network and no
+          # checkout: enumerate a space and evaluate its constraints. `tile %
+          # block_x` rules out exactly one of the six pairs below, so this
+          # exercises the constraint evaluator rather than only the parser.
+          mkdir -p kernel
+          cat > kernel/kernel.toml <<'TOML'
+          [kernel]
+          name = "smoke"
+          entry = "smoke"
+          domain = 1
+          needs_cc = "8.0"
+
+          [dims.block_x]
+          values = [32, 64, 128]
+
+          [dims.tile]
+          role = "spec"
+          values = [128, 192]
+
+          [constraints]
+          exprs = ["tile % block_x == 0"]
+          TOML
+          launchbound space kernel | tee space.txt
+          grep -q "smoke: 5 configurations (2 dims, 1 filtered by constraints)" space.txt || {
+            echo "::error::the published CLI enumerated the smoke space wrongly"; exit 1; }
