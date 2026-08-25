@@ -134,8 +134,13 @@ fn draw_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             format!(
-                "{} REFUSED configuration(s) measured FASTER than the chosen one — view 3",
-                r.rejected_faster.len()
+                "{} REFUSED {} measured FASTER than the chosen one — view 3",
+                r.rejected_faster.len(),
+                if r.rejected_faster.len() == 1 {
+                    "configuration"
+                } else {
+                    "configurations"
+                }
             ),
             Style::default().add_modifier(Modifier::BOLD),
         )));
