@@ -420,7 +420,7 @@ fn cmd_tune(
             )?;
             let dev = device(cc)?;
             println!(
-                "{} — ESTIMATED tuning (analytical model, cc {cc}); the gate is full,                  the timings are NOT measurements:",
+                "{} — ESTIMATED tuning (analytical model, cc {cc}); the gate is full, the timings are NOT measurements:",
                 spec.name
             );
             let mut admitted: Vec<_> = verdicts
