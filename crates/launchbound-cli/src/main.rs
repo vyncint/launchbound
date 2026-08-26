@@ -44,7 +44,7 @@ enum Command {
         /// Target compute capability for RC004 shared-memory context
         /// (docs/SAFETY.md): 8.6 for A10G, 7.5 for T4. A verdict at one
         /// --cc does not transfer to another.
-        #[arg(long)]
+        #[arg(long, value_parser = parse_cc)]
         cc: String,
         /// Directory containing the cargo-reconverge binary (else
         /// LAUNCHBOUND_RECONVERGE or PATH).
@@ -64,7 +64,7 @@ enum Command {
         #[arg(long, default_value = "corpus")]
         corpus: PathBuf,
         /// Target compute capability (gate context and provenance).
-        #[arg(long)]
+        #[arg(long, value_parser = parse_cc)]
         cc: String,
         /// Output directory for plan.json + PTX artifacts.
         #[arg(long)]
@@ -105,7 +105,7 @@ enum Command {
         #[arg(long, default_value = "corpus")]
         corpus: PathBuf,
         /// Target compute capability (device table lookup).
-        #[arg(long)]
+        #[arg(long, value_parser = parse_cc)]
         cc: String,
         /// A results.v1 file to correlate the model's ranking against.
         #[arg(long)]
@@ -123,8 +123,10 @@ enum Command {
         corpus: PathBuf,
         #[arg(long, value_parser = ["cuda", "metal", "model"])]
         backend: String,
-        /// Target compute capability (cuda/model backends).
-        #[arg(long, default_value = "8.6")]
+        /// Target compute capability (cuda/model backends). Required, like
+        /// `prune`'s and `model`'s: a verdict at one --cc does not transfer
+        /// to another, and this is the command whose answer you act on.
+        #[arg(long, value_parser = parse_cc)]
         cc: String,
         /// Wall-clock budget, e.g. 30m, 90s, 1h. Honoured, resumably.
         #[arg(long)]
@@ -171,6 +173,47 @@ fn parse_budget(text: &str) -> anyhow::Result<f64> {
         "h" => Ok(digits.parse::<f64>()? * 3600.0),
         _ => Ok(text.parse::<f64>()?),
     }
+}
+
+/// A compute capability, as typed at the command line.
+///
+/// Checked here so a mistake costs nothing. `prune` used to hand whatever
+/// was typed straight to `cargo reconverge`, once per candidate: a mistyped
+/// `--cc 80` spawned eleven subprocesses and printed ninety lines in which
+/// the actual problem appeared nowhere. Over the whole corpus, 101 spawns.
+///
+/// The format is all that is checked. Which capabilities are *known* differs
+/// by command — `prune` passes it to reconverge, whose table is larger than
+/// the model's — so membership stays where the table is consulted, and says
+/// so with the list.
+///
+/// `sm_NN` is the spelling a CUDA person already has in their fingers, and
+/// for two digits it is unambiguous: the first is the major, the second the
+/// minor. It is normalized rather than rejected, so `--cc 86` works.
+fn parse_cc(raw: &str) -> Result<String, String> {
+    let normalized = match raw.strip_prefix("sm_").unwrap_or(raw) {
+        digits if digits.len() == 2 && digits.chars().all(|c| c.is_ascii_digit()) => {
+            format!("{}.{}", &digits[..1], &digits[1..])
+        }
+        other => other.to_string(),
+    };
+    let mut parts = normalized.split('.');
+    let well_formed = match (parts.next(), parts.next(), parts.next()) {
+        (Some(major), Some(minor), None) => {
+            !major.is_empty()
+                && !minor.is_empty()
+                && major.chars().all(|c| c.is_ascii_digit())
+                && minor.chars().all(|c| c.is_ascii_digit())
+        }
+        _ => false,
+    };
+    if !well_formed {
+        return Err(format!(
+            "`{raw}` is not a compute capability — expected MAJOR.MINOR, e.g. `8.6` \
+             (the `sm_86` and `86` spellings are accepted too)"
+        ));
+    }
+    Ok(normalized)
 }
 
 fn main() -> ExitCode {
@@ -369,11 +412,18 @@ fn cmd_tune(
     let budget_secs = budget.map(parse_budget).transpose()?;
     let dir = resolve_kernel_dirs(Some(kernel), corpus)?.remove(0);
     let spec = KernelSpec::load(&dir)?;
+    let explicit_out = out.is_some();
     let out = out.unwrap_or_else(|| PathBuf::from("runs").join(format!("{}-{backend}", spec.name)));
-    std::fs::create_dir_all(&out)?;
 
+    // Created by the backends that write into it, not before the match. The
+    // model backend prints to stdout and writes nothing, so creating it
+    // unconditionally left an empty directory behind on every run — in
+    // `runs/`, which is checked in — and `launchbound report` on it failed
+    // with `verdicts.json: No such file`. Following the two commands in the
+    // order `--help` lists them did not work.
     match backend {
         "metal" => {
+            std::fs::create_dir_all(&out)?;
             // NO GATE on this path (docs/SAFETY.md §3.4): candidates are
             // `ungated`, and the report renderer prints the notice
             // unconditionally.
@@ -408,6 +458,15 @@ fn cmd_tune(
             cmd_report(&out, false, false)
         }
         "model" => {
+            // Nothing is written on this path, so an --out the caller took
+            // the trouble to type is worth answering rather than ignoring.
+            if explicit_out {
+                eprintln!(
+                    "note: --out is unused with --backend model — it prints the ranking and \
+                     writes no run directory. `launchbound stage` writes one that \
+                     `launchbound report` can read."
+                );
+            }
             use launchbound_model::{device, estimate};
             use launchbound_prune::{PruneOptions, Verdict, prune_kernel};
             let verdicts = prune_kernel(
@@ -450,6 +509,7 @@ fn cmd_tune(
             Ok(ExitCode::SUCCESS)
         }
         "cuda" => {
+            std::fs::create_dir_all(&out)?;
             let code = cmd_stage(kernel, corpus, cc, &out, reconverge_dir, false, None)?;
             if code != ExitCode::SUCCESS {
                 return Ok(code);
@@ -575,6 +635,21 @@ fn cmd_model(
     println!(
         "{} — ESTIMATED ranking (analytical model, cc {cc}; not a measurement):",
         spec.name
+    );
+    // The ranking is over the *whole* space. On `reduce-flip` the model's
+    // top five are all configurations the gate refuses — `warp_id()` splits
+    // a multi-warp block at a block-wide barrier — so the fastest thing
+    // here is a kernel that hangs. Saying "estimated, not measured" and
+    // nothing about safety puts the caveat on the cheap mistake and leaves
+    // the expensive one unmarked.
+    //
+    // This command deliberately runs no gate and needs no reconverge, which
+    // is worth keeping; so it says what it did not do, and names the command
+    // that does.
+    println!(
+        "  NOT GATED — every configuration, including the ones the convergence\n  \
+         gate refuses. `launchbound tune --backend model --cc {cc}` ranks only\n  \
+         the admitted ones; `launchbound prune --cc {cc}` says which those are."
     );
     println!("  {}", calibration_line(corpus, &spec.name));
     for est in ranked {

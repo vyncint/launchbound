@@ -108,6 +108,41 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(Paragraph::new(lines), area);
 }
 
+const CHOSEN_LABEL: &str = "CHOSEN  ";
+
+/// The chosen configuration, with its interval only if the interval fits.
+///
+/// At eighty columns — the default terminal size, and the width this suite
+/// mandates — the line used to be cut mid-value:
+///
+/// ```text
+/// │CHOSEN  c1-0000000000000009  block_x=32 tile=512 unroll=4  0.0400 ms [0.0398, │
+/// ```
+///
+/// That is not a shortened interval, it is a number with no upper bound and
+/// a dangling comma, on the one line carrying the result the reader came
+/// for. Dropping the interval whole is the honest shortening: the
+/// configuration and its time outrank the interval, and a reader who needs
+/// the interval has view 2 and a wider terminal.
+fn chosen_tail(
+    id: &str,
+    config: &str,
+    median_ms: f64,
+    lo_ms: f64,
+    hi_ms: f64,
+    panel_width: u16,
+) -> String {
+    let without = format!("{id}  {config}  {median_ms:.4} ms");
+    let with = format!("{without} [{lo_ms:.4}, {hi_ms:.4}]");
+    // The panel's two border columns are not text.
+    let usable = usize::from(panel_width).saturating_sub(2 + CHOSEN_LABEL.len());
+    if with.chars().count() <= usable {
+        with
+    } else {
+        without
+    }
+}
+
 /// The banner above the field when refused configurations measured faster.
 ///
 /// A function rather than an inline `format!` so both arities can be tested.
@@ -131,10 +166,14 @@ fn draw_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Some(chosen) => {
             let s = &chosen.summary;
             lines.push(Line::from(vec![
-                Span::styled("CHOSEN  ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(format!(
-                    "{}  {}  {:.4} ms [{:.4}, {:.4}]",
-                    chosen.id, chosen.config, s.median_ms, s.ci95_lo_ms, s.ci95_hi_ms
+                Span::styled(CHOSEN_LABEL, Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(chosen_tail(
+                    &chosen.id,
+                    &chosen.config,
+                    s.median_ms,
+                    s.ci95_lo_ms,
+                    s.ci95_hi_ms,
+                    area.width,
                 )),
             ]));
             if !r.indistinguishable_from_chosen.is_empty() {
@@ -380,6 +419,31 @@ fn bar(done: usize, total: usize, width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::refused_faster_banner;
+
+    #[test]
+    fn the_chosen_line_drops_its_interval_rather_than_cutting_it() {
+        let tail = |w| {
+            super::chosen_tail(
+                "c1-0000000000000009",
+                "block_x=32 tile=512 unroll=4",
+                0.0400,
+                0.0398,
+                0.0402,
+                w,
+            )
+        };
+        // 110 columns: room for all of it.
+        assert!(tail(110).ends_with("[0.0398, 0.0402]"), "{}", tail(110));
+        // 80 columns: the interval goes, whole.
+        let narrow = tail(80);
+        assert!(narrow.ends_with("0.0400 ms"), "{narrow}");
+        assert!(!narrow.contains('['), "no half-interval: {narrow}");
+        // And what is left fits the panel.
+        assert!(
+            narrow.chars().count() + 2 + super::CHOSEN_LABEL.len() <= 80,
+            "{narrow}"
+        );
+    }
 
     #[test]
     fn the_refused_faster_banner_agrees_with_its_own_count() {
