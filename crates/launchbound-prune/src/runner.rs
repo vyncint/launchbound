@@ -111,17 +111,84 @@ fn run_reconverge(dir: &Path, options: &PruneOptions) -> AnalyzerOutcome {
         }
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let tail: String = stderr
-            .lines()
-            .rev()
-            .take(6)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join("\n");
         AnalyzerOutcome::ToolError {
-            detail: format!("cargo reconverge exited {exit_code}:\n{tail}"),
+            detail: format!(
+                "cargo reconverge exited {exit_code}:\n{}",
+                diagnosis(&stderr)
+            ),
         }
+    }
+}
+
+/// The lines of `stderr` that say what went wrong.
+///
+/// reconverge marks them: they begin `error:`. Taking the *last* six lines
+/// instead — a reasonable-looking default, since a failing tool usually
+/// fails last — reliably picked the wrong six, because reconverge prints
+/// its diagnosis first and its usage reference after it. A mistyped `--cc`
+/// came back as the exit-code legend, once per candidate, with the sentence
+/// that would have solved it forty-odd lines out of view.
+///
+/// reconverge 0.4.0 stopped printing usage after a bad *value*, which fixes
+/// that case at the source. This is still the right way to read it: no
+/// caller can control what its analyzer prints, and an older reconverge on
+/// someone's PATH is exactly when a clear message matters most.
+///
+/// Falls back to the *head* rather than the tail when nothing is marked —
+/// a tool that prints a reference puts the reason before it.
+fn diagnosis(stderr: &str) -> String {
+    let marked: Vec<&str> = stderr
+        .lines()
+        .filter(|line| line.trim_start().starts_with("error:"))
+        .collect();
+    if !marked.is_empty() {
+        return marked.join("\n");
+    }
+    let head: Vec<&str> = stderr
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .take(6)
+        .collect();
+    if head.is_empty() {
+        "(no output on stderr)".to_string()
+    } else {
+        head.join("\n")
+    }
+}
+
+#[cfg(test)]
+mod diagnosis_tests {
+    use super::diagnosis;
+
+    /// The shape that caused this: the reason first, the reference after.
+    #[test]
+    fn the_marked_line_is_taken_however_far_from_the_end_it_is() {
+        let stderr = format!(
+            "error: `80` is not a compute capability; expected e.g. `8.6`\n\n{}",
+            "usage line\n".repeat(44)
+        );
+        assert_eq!(
+            diagnosis(&stderr),
+            "error: `80` is not a compute capability; expected e.g. `8.6`"
+        );
+    }
+
+    #[test]
+    fn every_marked_line_is_kept() {
+        let stderr = "error: first\nnoise\nerror: second\n";
+        assert_eq!(diagnosis(stderr), "error: first\nerror: second");
+    }
+
+    #[test]
+    fn unmarked_output_falls_back_to_the_head_not_the_tail() {
+        let stderr = "the reason\n\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\n";
+        assert!(diagnosis(stderr).starts_with("the reason"));
+        assert!(!diagnosis(stderr).contains("line 8"));
+    }
+
+    #[test]
+    fn empty_stderr_says_so_rather_than_nothing() {
+        assert_eq!(diagnosis(""), "(no output on stderr)");
+        assert_eq!(diagnosis("\n  \n"), "(no output on stderr)");
     }
 }

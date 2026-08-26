@@ -34,7 +34,7 @@ jobs:
 
       - name: Safety gate
         id: gate
-        uses: vyncint/launchbound/action@v1
+        uses: vyncint/launchbound/action@v2
         with:
           kernel: myrepo/kernels/my-reduction
           cc: "8.6"          # the part you will actually run on
@@ -63,7 +63,7 @@ the gate specializes per candidate.
 | `cc` | — | target compute capability, e.g. `"8.6"` (required; verdicts do not transfer across parts) |
 | `fail-on` | `tool-error` | `never`, `refused`, or `tool-error` |
 | `version` | `latest` | launchbound-cli release to install |
-| `reconverge-version` | `0.1.11` | reconverge release from crates.io — moves in lockstep with `toolchain` |
+| `reconverge-version` | `0.4.0` | reconverge release from crates.io — moves in lockstep with `toolchain` |
 | `toolchain` | `nightly-2026-04-03` | the nightly that built that reconverge |
 | `summary` | `"true"` | write the verdict table to the job summary |
 

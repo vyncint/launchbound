@@ -9,6 +9,118 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-26
+
+A major, and both reasons are in the "breaking" list this project keeps in
+[docs/RELEASING.md](docs/RELEASING.md): a changed CLI flag, and a change to
+what the gate admits.
+
+### Changed — breaking
+
+- **The safety gate pins `reconverge` 0.4.0**, up from 0.3.0, and 0.4.0
+  reads a shared-memory length written as a **named const**. 0.3.0 could
+  only read a literal: `SharedArray<f32, TILE>` arrived as an unevaluated
+  const, the analyzer's `eval_target_usize` refused it, and the static was
+  dropped from the RC004 budget with no finding and no diagnostic.
+
+  This is not an abstract gap — it is the shape every tunable kernel has.
+  `corpus/matmul-tiled` declares `SharedArray<f32, { TM * TK }>`, and
+  launchbound rewrites `TM`/`TK` per candidate, so **every configuration
+  this tool tries took the path RC004 could not see**. A space with an
+  over-cap tile pruned as all-clean.
+
+  Verified against the corpus: the six kernels' verdicts are unchanged
+  (their tiles are well under the cap), and raising `matmul-tiled` to
+  `TM = TK = 128` now produces
+  `error[RC004]: kernel matmul declares 73728 bytes`, where 0.3.0 said
+  nothing. Any kernel whose shared memory is sized by a const may now be
+  refused where it previously passed — which is the gate working, and is
+  why this is a major.
+
+- **`--cc` is required by `tune`**, as it already was by `prune` and
+  `model`. It defaulted to `8.6`, which meant the one command whose answer
+  you act on quietly picked a device, while the two inspection commands
+  made you choose. `prune --cc`'s own help says a verdict at one capability
+  does not transfer to another; RC004 is a capacity check, and 8.6 offers
+  164 KB per SM against 7.5's 64 KB.
+
+  `launchbound tune <kernel> --backend model` now asks for `--cc`.
+
+### Added
+
+- **`--cc` is validated at the command line, and the CUDA spellings work.**
+  A mistyped `--cc` used to be handed to `cargo reconverge` once per
+  candidate: eleven subprocesses for `reduce-flip`, 101 over the corpus, and
+  ninety lines of output in which the actual problem appeared nowhere. It is
+  now one line in ~100ms with nothing spawned. `--cc 86` and `--cc sm_86`
+  are normalized to `8.6` rather than rejected — for two digits the mapping
+  is unambiguous, and it is the spelling a CUDA user already has.
+
+### Fixed
+
+- **A reconverge failure reports what reconverge said.** The tool error
+  showed the *last* six lines of its stderr — a reasonable-looking default,
+  since a failing tool usually fails last, and reliably the wrong six:
+  reconverge prints its diagnosis first and its usage reference after it, so
+  the tail was the exit-code legend. reconverge 0.4.0 stopped printing usage
+  after a bad value, which fixes that case at the source; this reads the
+  lines marked `error:` regardless, because no caller controls what its
+  analyzer prints, and falls back to the head rather than the tail.
+
+- **`model` says that it is not gated.** It ranks the whole space, and on
+  `reduce-flip` its top five are all configurations the gate refuses — the
+  fastest row was a kernel that hangs, under a header that carefully said
+  "estimated, not a measurement" and nothing about safety. It still runs no
+  gate and needs no `reconverge`; it now says so, and names `tune --backend
+  model` as the gated form.
+
+- **`tune --backend model` no longer leaves an empty run directory.** The
+  directory was created before the backend match, for every backend, and the
+  model path writes nothing — so every run littered `runs/`, which is
+  checked in, and `launchbound report` on it failed with `verdicts.json: No
+  such file`. An `--out` given to this backend is now answered rather than
+  silently ignored.
+
+- **`launchbound-tui --help` prints help.** It read `args()` directly, so
+  every flag was taken as a run-directory path: `--help` came back as
+  `run dir: --help/verdicts.json: No such file or directory`, which reads as
+  a broken tool. `-h`, `--help`, `-V` and `--version` answer; any other
+  leading dash is reported as an unknown option, which is what stops the
+  next flag landing here as a path. This is a published binary.
+
+- **The chosen configuration's interval is dropped, not cut.** At eighty
+  columns — the default terminal size, and the width this suite mandates —
+  the line ended `0.0400 ms [0.0398, `: a number with no upper bound and a
+  dangling comma, on the one line carrying the result. The interval now goes
+  whole when it does not fit; at 110 columns it is unchanged.
+
+- **The TUI goldens wait for a finished frame.** They synced on a 150ms
+  quiet period, which is a guess at how long a repaint takes; on a loaded
+  runner the app pauses mid-repaint and the screen read is half-painted.
+  This had already cost the suite once — `ranking_scrolls_a_long_candidate_list`
+  carries a comment about a golden blessed from a too-early capture, which
+  then verified nothing while passing — and the same shape failed
+  reconverge's `main` on macOS. The binary already brackets every repaint in
+  DEC 2026 synchronized updates, so `wait_frame` observes only whole frames.
+  The 100-iteration stress gate went from **15.8s to 0.7s**.
+
+### Migrating from 1.x
+
+- **The Action's floating tag is now `@v2`.** `uses:
+  vyncint/launchbound/action@v1` keeps working and stays on 1.2.0, which is
+  the point of a floating major tag — but it stays on reconverge 0.3.0 with
+  it, and 0.3.0 is the analyzer that cannot see a named-const shared-memory
+  size. Move to `@v2` to get the gate this release is about.
+- **Add `--cc` to any `launchbound tune` invocation.** It has no default now.
+
+### Documentation
+
+- The CLI table listed `launchbound tui <run>`, which is not a subcommand —
+  the binary is `launchbound-tui`. It also omitted `model`, and showed
+  `tune` without the `--cc` it now requires.
+- The Action's input table still gave `reconverge-version` as `0.1.11`, two
+  releases stale.
+
 ## [1.2.0] - 2026-08-22
 
 ### Changed

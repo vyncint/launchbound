@@ -130,14 +130,24 @@ Two asymmetries, published rather than buried:
 
 ```
 launchbound space  <kernel> [--json]                  # enumerate the space, print its size
-launchbound prune  <kernel> [--json]                  # reconverge pass only — NO GPU NEEDED
-launchbound tune   <kernel> [--budget 30m] [--backend cuda|metal|model]
+launchbound prune  <kernel> --cc 8.6 [--json]         # reconverge pass only — NO GPU NEEDED
+launchbound model  <kernel> --cc 8.6                  # analytical ranking — NOT GATED
+launchbound tune   <kernel> --cc 8.6 --backend cuda|metal|model [--budget 30m]
 launchbound report <run> [--json] [--rejected]        # includes refused-but-faster configs
 launchbound apply  <run>                              # emit the cuda-oxide policy specialization
-launchbound tui    <run>                              # the run in four views: the chosen
+launchbound-tui    <run>                              # the run in four views: the chosen
                                                       # configuration and the field it beat,
                                                       # the ranking, the refusals, the progress
 ```
+
+`--cc` is required by `prune`, `model` and `tune` alike — a verdict at one
+compute capability does not transfer to another, and `tune` is the command
+whose answer you act on. The CUDA spellings work: `--cc 86` and `--cc sm_86`
+mean `8.6`.
+
+`model` ranks the **whole** space and says so: it runs no gate and needs no
+`reconverge`, so its fastest row may be a configuration that hangs. `tune
+--backend model` is the gated form of the same ranking.
 
 Exit codes: `0` a safe configuration was found; `1` the fastest candidates
 were refused and the chosen one is slower than a rejected candidate — notable,
@@ -147,7 +157,7 @@ reason string recorded in the report, and is never the default.
 `prune` needing no GPU is the reason it exists as its own verb: it is the only
 part of the pipeline a developer on a laptop can run, and it is the part that
 finds the bugs. It also ships as a [GitHub Action](action/) —
-`uses: vyncint/launchbound/action@v1` puts the gate in your CI.
+`uses: vyncint/launchbound/action@v2` puts the gate in your CI.
 
 ## Compared to the neighbours
 

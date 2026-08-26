@@ -15,11 +15,38 @@ use launchbound_report::{RunDir, build_report};
 use std::io::Write;
 use std::path::PathBuf;
 
+const USAGE: &str = "\
+usage: launchbound-tui <run-dir>
+
+  <run-dir>   a directory written by `launchbound stage` or `launchbound tune`,
+              holding verdicts.json (and results.json once measured)
+
+  1 overview \u{b7} 2 ranking \u{b7} 3 rejections \u{b7} 4 progress \u{b7} j/k scroll \u{b7} q quit
+";
+
 fn main() -> anyhow::Result<()> {
-    let run_dir = std::env::args()
-        .nth(1)
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow::anyhow!("usage: launchbound-tui <run-dir>"))?;
+    // One positional, read straight from `args()` — but a leading dash is
+    // answered rather than opened as a path. `--help` used to come back as
+    // `run dir: --help/verdicts.json: No such file or directory`, which
+    // reads as a broken tool rather than as an unknown flag, and this is a
+    // published binary.
+    let run_dir = match std::env::args().nth(1).as_deref() {
+        Some("-h" | "--help") => {
+            print!("{USAGE}");
+            return Ok(());
+        }
+        Some("-V" | "--version") => {
+            println!("launchbound-tui {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        // Rejecting every other leading dash is what stops this recurring:
+        // otherwise `--ascii` or `--no-color` lands here next, as a path.
+        Some(flag) if flag.starts_with('-') => {
+            return Err(anyhow::anyhow!("unknown option `{flag}`\n\n{USAGE}"));
+        }
+        Some(path) => PathBuf::from(path),
+        None => return Err(anyhow::anyhow!("{USAGE}")),
+    };
     let run = RunDir::load(&run_dir)?;
     let planned = run.plan.as_ref().map(|p| p.candidates.len()).unwrap_or(0);
     let report = build_report(&run)?;

@@ -1,8 +1,22 @@
 //! S8 gate tests: golden frames through a real PTY on hermetic fixtures —
 //! initial layout, live resize, a long candidate list scrolled, the live
 //! search progress view, and the rejection view — plus the 100-iteration
-//! stress. Sync policy: wait_idle / wait_until only, never sleep. No frame
-//! contains a clock or an animation.
+//! stress. No frame contains a clock or an animation.
+//!
+//! Sync policy: `wait_frame`, and the frame it returns is the one asserted
+//! on — never `wait_idle`, never sleep.
+//!
+//! These used to sync on a 150ms quiet period, which is a guess at how long
+//! a repaint takes. On a loaded runner it is the wrong guess: the app pauses
+//! mid-repaint, the period elapses, and the screen read is half-painted. It
+//! had already cost this suite once — see the comment in
+//! `ranking_scrolls_a_long_candidate_list`, where a golden was blessed from
+//! a too-early capture and the test then verified nothing while passing.
+//! The same shape failed reconverge's `main` on macOS at 2 and 16 threads.
+//!
+//! The binary brackets every repaint in DEC 2026 synchronized updates, so
+//! `wait_frame` observes only whole frames. No duration is involved, so
+//! there is no duration to get wrong.
 //!
 //! Regenerate goldens after an intentional UI change with
 //! `LAUNCHBOUND_BLESS=1 cargo test -p launchbound-tui --test tui`.
@@ -13,7 +27,6 @@ use std::{env, fs};
 
 use termlens::{Key, Terminal};
 
-const QUIET: Duration = Duration::from_millis(150);
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 fn fixture_run() -> PathBuf {
@@ -71,11 +84,17 @@ fn quit(mut t: Terminal, context: &str) {
     assert!(status.success(), "{context}: exited with {status:?}");
 }
 
+/// The overview has painted once its footer is on screen: it is drawn last,
+/// so a frame carrying it carries everything above it.
+fn ready(screen: &termlens::Screen) -> bool {
+    screen.to_string().contains("q quit")
+}
+
 #[test]
 fn overview_at_80x24() {
     let mut t = spawn((80, 24));
-    t.wait_idle(QUIET).expect("wait_idle");
-    assert_golden("overview-80x24.txt", &t.screen().to_string(), "overview");
+    let frame = t.wait_frame(ready).expect("the first complete frame");
+    assert_golden("overview-80x24.txt", &frame.to_string(), "overview");
     quit(t, "overview");
 }
 
@@ -83,10 +102,15 @@ fn overview_at_80x24() {
 #[test]
 fn resize_relayouts_the_frame() {
     let mut t = spawn((80, 24));
-    t.wait_idle(QUIET).expect("initial idle");
+    t.wait_frame(ready).expect("the first complete frame");
     t.resize(110, 32).expect("resize");
-    t.wait_idle(QUIET).expect("post-resize idle");
-    assert_golden("overview-110x32.txt", &t.screen().to_string(), "resized");
+    // The wider panel is what the frame is waited on, not a duration: the
+    // chosen line only has room for its interval at this geometry, so the
+    // interval's presence *is* the relayout having happened.
+    let frame = t
+        .wait_frame(|s| s.to_string().contains("[0.0398, 0.0402]"))
+        .expect("the relaid-out frame");
+    assert_golden("overview-110x32.txt", &frame.to_string(), "resized");
     quit(t, "resized");
 }
 
@@ -94,11 +118,10 @@ fn resize_relayouts_the_frame() {
 #[test]
 fn ranking_scrolls_a_long_candidate_list() {
     let mut t = spawn((80, 24));
-    t.wait_idle(QUIET).expect("idle");
+    t.wait_frame(ready).expect("the first complete frame");
     t.send(Key::Char('2')).expect("send 2");
-    t.wait_until(|s| s.to_string().contains("ranking ("))
+    t.wait_frame(|s| s.to_string().contains("ranking ("))
         .expect("ranking view");
-    t.wait_idle(QUIET).expect("view settled");
     for _ in 0..5 {
         t.send(Key::Char('j')).expect("send j");
     }
@@ -106,17 +129,13 @@ fn ranking_scrolls_a_long_candidate_list() {
     // pre-scroll top rows (…0a, …09, …01, …02, …03) are gone and …04 leads.
     // The original golden was blessed from a too-early capture and never
     // verified scrolling at all — caught by ubuntu delivering all five keys.
-    t.wait_until(|s| {
-        let frame = s.to_string();
-        frame.contains("c1-0000000000000004") && !frame.contains("c1-0000000000000003")
-    })
-    .expect("scroll applied");
-    t.wait_idle(QUIET).expect("scrolled idle");
-    assert_golden(
-        "ranking-scrolled-80x24.txt",
-        &t.screen().to_string(),
-        "ranking",
-    );
+    let frame = t
+        .wait_frame(|s| {
+            let frame = s.to_string();
+            frame.contains("c1-0000000000000004") && !frame.contains("c1-0000000000000003")
+        })
+        .expect("scroll applied");
+    assert_golden("ranking-scrolled-80x24.txt", &frame.to_string(), "ranking");
     quit(t, "ranking");
 }
 
@@ -124,14 +143,14 @@ fn ranking_scrolls_a_long_candidate_list() {
 #[test]
 fn rejection_view_names_rules_and_spans() {
     let mut t = spawn((80, 24));
-    t.wait_idle(QUIET).expect("idle");
+    t.wait_frame(ready).expect("the first complete frame");
     t.send(Key::Char('3')).expect("send 3");
     // The help line always contains the word "rejections"; sync on
     // view-body content instead.
-    t.wait_until(|s| s.to_string().contains("all refused configurations:"))
-        .expect("rejections view");
-    t.wait_idle(QUIET).expect("settled");
-    let screen = t.screen().to_string();
+    let screen = t
+        .wait_frame(|s| s.to_string().contains("all refused configurations:"))
+        .expect("rejections view")
+        .to_string();
     assert!(screen.contains("RC001"), "rule id visible");
     assert!(screen.contains("src/lib.rs:33:13"), "span visible");
     assert_golden("rejections-80x24.txt", &screen, "rejections");
@@ -142,27 +161,28 @@ fn rejection_view_names_rules_and_spans() {
 #[test]
 fn progress_view_shows_measured_of_planned() {
     let mut t = spawn((80, 24));
-    t.wait_idle(QUIET).expect("idle");
+    t.wait_frame(ready).expect("the first complete frame");
     t.send(Key::Char('4')).expect("send 4");
-    t.wait_until(|s| s.to_string().contains("measured 11 of"))
-        .expect("progress view");
-    t.wait_idle(QUIET).expect("settled");
-    let screen = t.screen().to_string();
+    let screen = t
+        .wait_frame(|s| s.to_string().contains("measured 11 of"))
+        .expect("progress view")
+        .to_string();
     assert!(screen.contains("measured 11 of"), "progress counter");
     assert_golden("progress-80x24.txt", &screen, "progress");
     quit(t, "progress");
 }
 
-/// The S8 stress gate: 100 consecutive spawn → idle → golden → quit cycles.
+/// The S8 stress gate: 100 consecutive spawn → frame → golden → quit cycles.
 #[test]
 fn stress_100_runs_at_80x24() {
     for run in 0..100 {
         let mut t = spawn((80, 24));
-        t.wait_idle(QUIET)
-            .unwrap_or_else(|e| panic!("run {run}: wait_idle: {e}"));
+        let frame = t
+            .wait_frame(ready)
+            .unwrap_or_else(|e| panic!("run {run}: waiting for the first frame: {e}"));
         assert_golden(
             "overview-80x24.txt",
-            &t.screen().to_string(),
+            &frame.to_string(),
             &format!("run {run}"),
         );
         quit(t, &format!("run {run}"));
