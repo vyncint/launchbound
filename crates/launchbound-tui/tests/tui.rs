@@ -102,11 +102,23 @@ fn overview_at_80x24() {
 #[test]
 fn resize_relayouts_the_frame() {
     let mut t = spawn((80, 24));
-    t.wait_frame(ready).expect("the first complete frame");
+    // Both waits are one-directional, which is what makes this test
+    // deterministic rather than a race. The chosen line has room for its
+    // interval at 110 columns and not at 80, so the interval's *absence*
+    // identifies a pre-resize frame and its presence a post-resize one.
+    //
+    // Waiting on `ready` here instead — a predicate true of every frame —
+    // is what flaked: it returns the earliest frame nobody has looked at,
+    // so on a loaded runner the frame it handed back could already be the
+    // one the resize produced, leaving nothing for the second wait and a
+    // ten-second timeout. termlens says so in as many words ("has not
+    // completed a repaint since the frame this terminal last returned").
+    t.wait_frame(|s| {
+        let frame = s.to_string();
+        frame.contains("q quit") && !frame.contains("[0.0398, 0.0402]")
+    })
+    .expect("the 80-column frame");
     t.resize(110, 32).expect("resize");
-    // The wider panel is what the frame is waited on, not a duration: the
-    // chosen line only has room for its interval at this geometry, so the
-    // interval's presence *is* the relayout having happened.
     let frame = t
         .wait_frame(|s| s.to_string().contains("[0.0398, 0.0402]"))
         .expect("the relaid-out frame");
