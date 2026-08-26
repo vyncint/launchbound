@@ -34,7 +34,7 @@ jobs:
 
       - name: Safety gate
         id: gate
-        uses: vyncint/launchbound/action@v1
+        uses: vyncint/launchbound/action@v2
         with:
           kernel: myrepo/kernels/my-reduction
           cc: "8.6"          # the part you will actually run on

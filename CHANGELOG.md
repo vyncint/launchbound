@@ -104,6 +104,15 @@ what the gate admits.
   DEC 2026 synchronized updates, so `wait_frame` observes only whole frames.
   The 100-iteration stress gate went from **15.8s to 0.7s**.
 
+### Migrating from 1.x
+
+- **The Action's floating tag is now `@v2`.** `uses:
+  vyncint/launchbound/action@v1` keeps working and stays on 1.2.0, which is
+  the point of a floating major tag — but it stays on reconverge 0.3.0 with
+  it, and 0.3.0 is the analyzer that cannot see a named-const shared-memory
+  size. Move to `@v2` to get the gate this release is about.
+- **Add `--cc` to any `launchbound tune` invocation.** It has no default now.
+
 ### Documentation
 
 - The CLI table listed `launchbound tui <run>`, which is not a subcommand —

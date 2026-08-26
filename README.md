@@ -157,7 +157,7 @@ reason string recorded in the report, and is never the default.
 `prune` needing no GPU is the reason it exists as its own verb: it is the only
 part of the pipeline a developer on a laptop can run, and it is the part that
 finds the bugs. It also ships as a [GitHub Action](action/) —
-`uses: vyncint/launchbound/action@v1` puts the gate in your CI.
+`uses: vyncint/launchbound/action@v2` puts the gate in your CI.
 
 ## Compared to the neighbours
 
