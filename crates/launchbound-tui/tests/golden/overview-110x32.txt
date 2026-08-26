@@ -4,7 +4,7 @@ launchbound — reduce-flip · gate cc 8.6 · measured · NVIDIA A10G
 ┌overview────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │CHOSEN  c1-0000000000000009  block_x=32 tile=512 unroll=4  0.0400 ms [0.0398, 0.0402]                       │
 │                                                                                                            │
-│1 REFUSED configuration(s) measured FASTER than the chosen one — view 3                                     │
+│1 REFUSED configuration measured FASTER than the chosen one — view 3                                        │
 │                                                                                                            │
 │GPU-seconds consumed: 25.5                                                                                  │
 │                                                                                                            │

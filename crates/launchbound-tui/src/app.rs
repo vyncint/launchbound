@@ -108,6 +108,22 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(Paragraph::new(lines), area);
 }
 
+/// The banner above the field when refused configurations measured faster.
+///
+/// A function rather than an inline `format!` so both arities can be tested.
+/// The count comes from measured timings, and the one fixture the golden
+/// frames are built on yields exactly one — so the plural branch is not
+/// reachable from a rendered frame without rebuilding that fixture, which
+/// would move every golden in the suite to cover two words.
+fn refused_faster_banner(count: usize) -> String {
+    let noun = if count == 1 {
+        "configuration"
+    } else {
+        "configurations"
+    };
+    format!("{count} REFUSED {noun} measured FASTER than the chosen one — view 3")
+}
+
 fn draw_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let r = &app.report;
     let mut lines = Vec::new();
@@ -133,15 +149,7 @@ fn draw_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     if !r.rejected_faster.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            format!(
-                "{} REFUSED {} measured FASTER than the chosen one — view 3",
-                r.rejected_faster.len(),
-                if r.rejected_faster.len() == 1 {
-                    "configuration"
-                } else {
-                    "configurations"
-                }
-            ),
+            refused_faster_banner(r.rejected_faster.len()),
             Style::default().add_modifier(Modifier::BOLD),
         )));
     }
@@ -367,4 +375,24 @@ fn bar(done: usize, total: usize, width: usize) -> String {
         s.push(if i < filled { '#' } else { '.' });
     }
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::refused_faster_banner;
+
+    #[test]
+    fn the_refused_faster_banner_agrees_with_its_own_count() {
+        assert_eq!(
+            refused_faster_banner(1),
+            "1 REFUSED configuration measured FASTER than the chosen one — view 3"
+        );
+        assert_eq!(
+            refused_faster_banner(2),
+            "2 REFUSED configurations measured FASTER than the chosen one — view 3"
+        );
+        // Not reachable through the view — the banner is drawn only when the
+        // list is non-empty — but the function is total, so it is pinned.
+        assert!(refused_faster_banner(0).starts_with("0 REFUSED configurations"));
+    }
 }
