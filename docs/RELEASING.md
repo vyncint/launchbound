@@ -48,6 +48,17 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 Pushing the tag runs `release.yml`, which gates, then publishes each crate in
 order via Trusted Publishing.
 
+### The floating major tag
+
+`release.yml` moves `vN` to each release, so `@v2` follows 2.x without a
+manual step. It is covered by the `protect-release-tags` ruleset only up to
+`refs/tags/v*.*.*` — release tags are immutable, floating pointers are not,
+because being moved is the whole of what a floating pointer is for.
+
+That distinction was learned the hard way: the ruleset originally covered
+`refs/tags/v*`, so the job could not create `v2` at all and 2.0.0's floating
+tag had to be pushed by hand.
+
 ## After the tag
 
 - **The GitHub Release is created by hand**, from the CHANGELOG section:
@@ -73,8 +84,17 @@ order via Trusted Publishing.
 
 - **Before publish**: fix, delete the tag (`git push --delete origin vX.Y.Z`),
   re-tag. Nothing was published; the world never saw it.
-- **Part-way through the eight crates**: re-run `release.yml` by dispatch. It
-  skips what is already on the registry.
+- **Part-way through the eight crates**: re-run `release.yml` by dispatch,
+  passing the tag:
+
+  ```sh
+  gh workflow run release.yml -f tag=vX.Y.Z
+  ```
+
+  It skips what is already on the registry, then moves `vN`. The tag is an
+  input rather than inferred because a dispatch has no tag of its own, and a
+  resumed release that skipped the floating tag is a release whose documented
+  `@vN` still points at the previous version.
 - **After publish**: crates.io is immutable. Ship `X.Y.Z+1`. Yank only if the
   release is actively harmful — a yanked crate still breaks downstream
   lockfiles.
