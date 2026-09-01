@@ -1,11 +1,15 @@
-# Scheduled pin watch: reports when cuda-oxide or reconverge
+# Pin watch: reports when cuda-oxide or reconverge
 # move upstream by opening an issue. It NEVER bumps a pin — a bump is a human
 # decision, its own commit, and a gate re-run (CONTRIBUTING.md).
+#
+# Dispatch-only: the weekly schedule is commented out in `on:` below, so an
+# upstream move is noticed when somebody runs this, not when it happens.
 name: pins
 
 on:
-  schedule:
-    - cron: "17 6 * * 1" # weekly, Monday morning UTC
+  # Scheduled runs are disabled. Uncomment the block below to restore them.
+  # schedule:
+  #   - cron: "17 6 * * 1" # weekly, Monday morning UTC
   workflow_dispatch:
 
 permissions:
