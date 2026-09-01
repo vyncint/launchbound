@@ -158,8 +158,9 @@ Three pins move together or not at all: the nightly in
 `reconverge` is a rustc-driver tool — it must be built by the exact rustc it
 wraps — and `cuda-oxide` requires the same pin. A bump is its own commit,
 never mixed with a behaviour change, and re-runs the affected stage gates.
-The scheduled `pins.yml` workflow reports upstream movement by opening an
-issue; it never bumps anything. Current pins: nightly-2026-04-03,
+The `pins.yml` workflow reports upstream movement by opening an issue; it
+never bumps anything. Its weekly cron is commented out, so upstream movement
+is noticed when you dispatch it. Current pins: nightly-2026-04-03,
 cuda-oxide 50d07314, reconverge 0.1.11 (installed from crates.io).
 
 ## 10. License
