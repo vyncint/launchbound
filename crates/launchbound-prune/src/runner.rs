@@ -193,6 +193,24 @@ mod diagnosis_tests {
         );
     }
 
+    /// rustc's primary diagnostics carry a code, and the filter dropped
+    /// them: `error[E0583]:` does not start with `error:`. So the message
+    /// the filter was built to preserve was the one it removed, for exactly
+    /// the class of failure a kernel author actually hits.
+    #[test]
+    fn a_rustc_diagnostic_with_a_code_survives() {
+        let stderr = "error[E0583]: file not found for module `util`\n\
+                      error: could not compile `reduce-flip` (lib) due to 1 previous error\n";
+        let out = diagnosis(stderr);
+        assert!(
+            out.contains("error[E0583]: file not found for module `util`"),
+            "the line that names the failure must survive: {out}"
+        );
+        // #19's line still comes through: cargo's summary is not the
+        // diagnosis, but dropping it would be a different bug.
+        assert!(out.contains("could not compile"), "{out}");
+    }
+
     #[test]
     fn every_marked_line_is_kept() {
         let stderr = "error: first\nnoise\nerror: second\n";

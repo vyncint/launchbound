@@ -176,3 +176,126 @@ pub fn received_excerpt(stdout: &str, limit: usize) -> String {
         out
     }
 }
+
+#[cfg(test)]
+mod stream_tests {
+    use super::*;
+
+    fn doc(krate: &str, target: &str, codes: &[&str]) -> String {
+        let findings: Vec<serde_json::Value> = codes
+            .iter()
+            .map(|code| {
+                serde_json::json!({
+                    "code": code,
+                    "confidence": "deny",
+                    "kernel": "k",
+                    "message": "m",
+                    "explain": code,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "schema": "findings.v1",
+            "tool": { "name": "reconverge", "version": "0.5.0" },
+            "crate": krate,
+            "target": target,
+            "findings": findings,
+        })
+        .to_string()
+    }
+
+    /// The shape that hard-stopped every candidate of a crate with a
+    /// `src/main.rs` beside its library: two documents, one per target.
+    #[test]
+    fn a_lib_and_a_bin_are_two_documents_and_their_findings_union() {
+        let stdout = format!(
+            "{}\n{}\n",
+            doc("k", "bin", &[]),
+            doc("k", "lib", &["RC001"])
+        );
+        let findings = read_stream(&stdout).expect("two documents are the contract, not an error");
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "RC001");
+    }
+
+    /// A deny finding in *any* target is a reason to refuse.
+    #[test]
+    fn a_finding_in_either_target_reaches_the_decision() {
+        let stdout = format!(
+            "{}\n{}\n",
+            doc("k", "lib", &["RC001"]),
+            doc("k", "bin", &["RC003"])
+        );
+        let mut codes: Vec<String> = read_stream(&stdout)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.code)
+            .collect();
+        codes.sort();
+        assert_eq!(codes, ["RC001", "RC003"]);
+    }
+
+    #[test]
+    fn one_document_still_works_and_blank_lines_are_skipped() {
+        let stdout = format!("\n{}\n\n", doc("k", "lib", &["RC002"]));
+        assert_eq!(read_stream(&stdout).unwrap().len(), 1);
+    }
+
+    /// An older analyzer writes no `target`; the union does not need one.
+    #[test]
+    fn a_document_without_a_target_field_still_parses() {
+        let stdout = r#"{"schema":"findings.v1","crate":"k","findings":[]}"#;
+        assert!(read_stream(stdout).unwrap().is_empty());
+        let doc = FindingsDoc::parse(stdout).unwrap();
+        assert_eq!(doc.target, None);
+    }
+
+    /// Unreadable output is still a hard stop — `docs/SAFETY.md` §2 — and
+    /// now says which line, so a two-document stream with one bad line is
+    /// diagnosable.
+    #[test]
+    fn a_line_that_does_not_parse_is_an_error_naming_the_line() {
+        let stdout = format!("{}\nnot json\n", doc("k", "lib", &[]));
+        let err = read_stream(&stdout).unwrap_err().to_string();
+        assert!(err.contains("line 2"), "{err}");
+        assert!(err.contains("parse failed"), "{err}");
+    }
+
+    #[test]
+    fn another_schema_is_refused_by_name() {
+        let stdout = r#"{"schema":"findings.v99","crate":"k","findings":[]}"#;
+        let err = read_stream(stdout).unwrap_err().to_string();
+        assert!(err.contains("findings.v99"), "{err}");
+    }
+
+    #[test]
+    fn no_output_at_all_is_an_error_rather_than_a_clean_pass() {
+        // The direction that matters: nothing must ever read as "no
+        // findings", which is a pass.
+        for stdout in ["", "   ", "\n\n"] {
+            assert!(read_stream(stdout).is_err(), "{stdout:?}");
+        }
+    }
+
+    /// "trailing characters at line 2 column 1" told the reporter
+    /// everything and would tell a user nothing.
+    #[test]
+    fn a_failure_shows_what_was_received() {
+        let excerpt = received_excerpt("{\"schema\":\"findings.v1\"}\nsecond line\n", 200);
+        assert!(excerpt.contains("findings.v1"), "{excerpt}");
+        assert!(
+            excerpt.contains("\\n"),
+            "newlines are escaped, not printed: {excerpt}"
+        );
+        assert_eq!(received_excerpt("", 200), "(nothing)");
+        // Bounded, and marked when it is cut.
+        let long = received_excerpt(&"x".repeat(500), 200);
+        assert!(
+            long.ends_with('…') && long.chars().count() <= 201,
+            "{}",
+            long.len()
+        );
+        // Control bytes never reach a terminal from foreign output.
+        assert!(!received_excerpt("a\u{1b}[2Jb", 200).contains('\u{1b}'));
+    }
+}

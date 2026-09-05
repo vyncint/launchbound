@@ -44,6 +44,11 @@ enum Command {
         /// Target compute capability for RC004 shared-memory context
         /// (docs/SAFETY.md): 8.6 for A10G, 7.5 for T4. A verdict at one
         /// --cc does not transfer to another.
+        ///
+        /// The gate checks thread convergence and static shared-memory
+        /// capacity at this capability. It does NOT check that the device
+        /// code can be lowered for it: instruction availability is
+        /// `needs_cc` in kernel.toml and is the author's claim.
         #[arg(long, value_parser = parse_cc)]
         cc: String,
         /// Directory containing the cargo-reconverge binary (else
@@ -1059,6 +1064,21 @@ fn cmd_prune(
             println!(
                 "  => {clean} clean, {caveats} with caveats, {refused} refused, {errors} tool errors"
             );
+            // What "clean" means, on the line that says it. The gate answers
+            // the convergence question and the shared-memory one; it has no
+            // view of instruction availability, so a kernel using an
+            // `sm_80+` intrinsic under `needs_cc = "7.5"` is admitted at
+            // `--cc 7.5` and only fails when something finally lowers to PTX
+            // for that part. `needs_cc` is the author's claim and is taken
+            // on trust — which is defensible, and was nowhere stated.
+            if clean > 0 || caveats > 0 {
+                println!(
+                    "     (checked: thread convergence and static shared memory at cc {cc}. \
+                     NOT checked: whether the device code can lower for that part — \
+                     instruction availability is `needs_cc` in kernel.toml, the author's \
+                     claim, taken on trust.)"
+                );
+            }
         }
         if verdicts
             .iter()

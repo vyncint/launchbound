@@ -200,3 +200,66 @@ fn stress_100_runs_at_80x24() {
         quit(t, &format!("run {run}"));
     }
 }
+
+/// No shipped frame is cut mid-value or mid-word without an ellipsis.
+///
+/// Three views had this defect and two were fixed one at a time: #24 took
+/// the chosen line, and the ranking and rejection views kept it — the
+/// ranking losing every closing bracket, so each interval read as a number
+/// with no upper bound, and the rejections losing the clause that says what
+/// to do about the refusal. A golden is a recording of shipped behaviour,
+/// so the goldens are where the scan belongs.
+///
+/// The rule is what a rendered field may *end* with at the panel border. A
+/// digit, `,`, `[`, `(`, `=` or `-` there means the value continued and was
+/// cut; a letter means a word was. An ellipsis is allowed: a marked
+/// shortening is a choice, and an unmarked one is a bug.
+#[test]
+fn no_golden_line_is_cut_at_the_panel_border() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let mut checked = 0;
+    for entry in fs::read_dir(&dir).expect("tests/golden must exist") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = fs::read_to_string(&path).unwrap();
+        for (number, line) in text.lines().enumerate() {
+            // Only rows that reach a right border can be cut by one.
+            let Some(inner) = line.strip_suffix('│') else {
+                continue;
+            };
+            let Some(inner) = inner.strip_prefix('│') else {
+                continue;
+            };
+            let Some(last) = inner.chars().next_back() else {
+                continue;
+            };
+            // A box-drawing row is the border itself, not content.
+            if inner.chars().all(|c| c == '─' || c == ' ') {
+                continue;
+            }
+            if last == '…' {
+                continue;
+            }
+            let cut = last.is_ascii_digit() || matches!(last, ',' | '[' | '(' | '=' | '-');
+            assert!(
+                !cut,
+                "{name}:{}: a value is cut at the panel border (ends {last:?}):\n{line}",
+                number + 1
+            );
+            // A word cut mid-way. A field that legitimately ends in a letter
+            // (`ms`, a kernel name) is indistinguishable from a truncated
+            // one by the last character alone, so this only fires when the
+            // row is full to the border AND the last word is long enough to
+            // be a sentence rather than a unit.
+            let full = inner.chars().count() >= 76;
+            let tail = inner.split_whitespace().next_back().unwrap_or("");
+            assert!(
+                !(full && last.is_alphabetic() && tail.len() > 6),
+                "{name}:{}: a word is cut at the panel border ({tail:?}):\n{line}",
+                number + 1
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "no goldens found in {dir:?}");
+}
