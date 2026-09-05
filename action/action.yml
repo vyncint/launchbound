@@ -51,7 +51,7 @@ inputs:
       reconverge-driver). Must be built by the toolchain below — the pins
       move together.
     required: false
-    default: "0.4.0"
+    default: "0.5.0"
   toolchain:
     description: >-
       The pinned nightly that matches reconverge-version; the pair moves

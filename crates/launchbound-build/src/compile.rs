@@ -124,12 +124,17 @@ impl Compiler {
         let output = self.executor.run_script(&script)?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            let tail: Vec<&str> = stderr.lines().rev().take(8).collect();
-            let tail: Vec<&str> = tail.into_iter().rev().collect();
+            // A missing subcommand is not a compile failure, and cargo's own
+            // help for it sends the reader to `cargo search cargo-oxide` —
+            // a package that is not on crates.io. This tool knows the pin
+            // and can answer properly.
+            if is_missing_subcommand(&stderr) {
+                return Err(BuildError::Compile(missing_oxide_message()));
+            }
             return Err(BuildError::Compile(format!(
-                "cargo oxide inspect {stem} failed (exit {:?}):\n{}",
-                output.status.code(),
-                tail.join("\n")
+                "cargo oxide inspect {stem} failed (exit {}):\n{}",
+                exit_label(output.status.code()),
+                diagnosis(&stderr)
             )));
         }
         let artifact = scratch.join(format!("{stem}.ptx"));
@@ -139,6 +144,79 @@ impl Compiler {
                 artifact.display()
             ))
         })
+    }
+}
+
+/// Did cargo report that it has no `oxide` subcommand?
+fn is_missing_subcommand(stderr: &str) -> bool {
+    stderr.contains("no such command: `oxide`") || stderr.contains("no such subcommand: `oxide`")
+}
+
+/// The pinned cuda-oxide commit, kept beside the pin sites the policy names.
+///
+/// Named here so a pin bump moves the message with it — `check-pins.sh`
+/// asserts this constant against `rust-toolchain.toml` and the workflows,
+/// because drift between recorded pins is the failure this repository keeps
+/// hitting.
+pub const CUDA_OXIDE_PIN: &str = "50d07314eb8b7d5ec821ba02b0048a753c20dd4e";
+
+/// What to say when `cargo oxide` is not installed.
+fn missing_oxide_message() -> String {
+    format!(
+        "`cargo oxide` is not installed — the gate can compile nothing \
+         without it\n\n  \
+         cuda-oxide is pinned to {pin} and is NOT published to crates.io, so \
+         `cargo search cargo-oxide` (which cargo suggests) finds nothing. \
+         Check it out beside this repository, as CI does, and install its \
+         cargo subcommand:\n\n    \
+         git clone https://github.com/NVlabs/cuda-oxide ../cuda-oxide\n    \
+         git -C ../cuda-oxide checkout {short}\n    \
+         cargo install --path ../cuda-oxide/crates/cargo-oxide\n\n  \
+         `launchbound prune` needs none of this — it is the whole pipeline a \
+         laptop can run.",
+        pin = CUDA_OXIDE_PIN,
+        short = &CUDA_OXIDE_PIN[..8],
+    )
+}
+
+/// An exit code, or what to say when there was not one.
+///
+/// `{:?}` on an `Option<i32>` printed `exit Some(101)` at a user.
+fn exit_label(code: Option<i32>) -> String {
+    match code {
+        Some(code) => code.to_string(),
+        // Unix only, but the string is honest anywhere.
+        None => "killed by a signal".to_string(),
+    }
+}
+
+/// The lines of a failing compiler's stderr that say what went wrong.
+///
+/// The same reasoning as `launchbound_prune::diagnosis`, and the same bug:
+/// the tail of a failing compile is `error: could not compile … due to N
+/// previous errors`, and the N errors are above the cut. rustc's primary
+/// diagnostics carry a code — `error[E0583]:` — so both marker forms are
+/// accepted, and the fallback is the head rather than the tail.
+fn diagnosis(stderr: &str) -> String {
+    let marked: Vec<&str> = stderr
+        .lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("error:") || line.starts_with("error[")
+        })
+        .collect();
+    if !marked.is_empty() {
+        return marked.join("\n");
+    }
+    let head: Vec<&str> = stderr
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .take(8)
+        .collect();
+    if head.is_empty() {
+        "(no output on stderr)".to_string()
+    } else {
+        head.join("\n")
     }
 }
 

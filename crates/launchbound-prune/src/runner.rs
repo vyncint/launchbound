@@ -7,7 +7,7 @@
 
 use crate::PruneError;
 use crate::decide::{AnalyzerOutcome, Verdict, decide};
-use crate::findings::FindingsDoc;
+use crate::findings;
 use launchbound_build::scratch::{default_scratch_root, prepare_scratch, write_params};
 use launchbound_space::{Config, KernelSpec, enumerate};
 use std::collections::BTreeMap;
@@ -61,6 +61,12 @@ pub fn prune_kernel(
 
 /// Run `cargo reconverge check` in `dir`. Exit 2 or unparseable output is a
 /// tool error — a hard stop, never a pass by omission (docs/SAFETY.md).
+///
+/// A failure names `dir`, which is the *scratch* copy rather than the
+/// kernel crate. The distinction is the whole diagnosis when the two
+/// differ: the gate used to report `error: could not compile` against a
+/// crate whose own `cargo check` is clean, and never said that what it
+/// compiled was not what the reader was looking at. `cd` there and see.
 fn run_reconverge(dir: &Path, options: &PruneOptions) -> AnalyzerOutcome {
     let mut cmd = Command::new("cargo");
     cmd.args([
@@ -97,23 +103,26 @@ fn run_reconverge(dir: &Path, options: &PruneOptions) -> AnalyzerOutcome {
     let exit_code = output.status.code().unwrap_or(-1);
     if exit_code == 0 || exit_code == 1 {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        match FindingsDoc::parse(stdout.trim()) {
-            Ok(doc) if doc.schema == "findings.v1" => AnalyzerOutcome::Findings {
+        // JSONL, one document per analyzed target — reconverge's documented
+        // contract, and the shape a package with a lib and a bin produces.
+        match findings::read_stream(&stdout) {
+            Ok(findings) => AnalyzerOutcome::Findings {
                 exit_code,
-                findings: doc.findings,
-            },
-            Ok(doc) => AnalyzerOutcome::ToolError {
-                detail: format!("unexpected findings schema `{}`", doc.schema),
+                findings,
             },
             Err(e) => AnalyzerOutcome::ToolError {
-                detail: format!("findings.v1 parse failed: {e}"),
+                detail: format!(
+                    "{e}\n  received: {}",
+                    findings::received_excerpt(&stdout, 200)
+                ),
             },
         }
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         AnalyzerOutcome::ToolError {
             detail: format!(
-                "cargo reconverge exited {exit_code}:\n{}",
+                "cargo reconverge exited {exit_code} in {}:\n{}",
+                dir.display(),
                 diagnosis(&stderr)
             ),
         }
@@ -136,10 +145,21 @@ fn run_reconverge(dir: &Path, options: &PruneOptions) -> AnalyzerOutcome {
 ///
 /// Falls back to the *head* rather than the tail when nothing is marked —
 /// a tool that prints a reference puts the reason before it.
+///
+/// The marker has to be **both** forms. rustc's primary diagnostics begin
+/// `error[E0583]:` — a code in brackets before the colon — so a filter on
+/// `error:` alone kept cargo's summary line and dropped the line that names
+/// the failure. "See the errors above": the one that was above was the one
+/// the filter removed. reconverge's own `error:` lines came through, so the
+/// filter worked for the analyzer and failed for the compiler, which is the
+/// common case of a gate tool error on a kernel that has one.
 fn diagnosis(stderr: &str) -> String {
     let marked: Vec<&str> = stderr
         .lines()
-        .filter(|line| line.trim_start().starts_with("error:"))
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("error:") || line.starts_with("error[")
+        })
         .collect();
     if !marked.is_empty() {
         return marked.join("\n");

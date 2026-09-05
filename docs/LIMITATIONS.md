@@ -6,7 +6,7 @@ launchbound's, with numbers where we have them. Everything here was true on
 
 ## The gate inherits reconverge's limits, wholesale
 
-A clean gate is **not a proof of correctness**. `reconverge` (v0.4.0) is
+A clean gate is **not a proof of correctness**. `reconverge` (v0.5.0) is
 summary-based and interprocedural, handles reducible control flow only,
 cannot evaluate non-literal masks, and puts data races entirely out of
 scope. Its own documentation is the authority; launchbound adds no analysis

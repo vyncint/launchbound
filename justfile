@@ -3,7 +3,7 @@
 default: ci
 
 # The full local gate. Never push a commit that fails this.
-ci: fmt-check clippy test deny schemas
+ci: fmt-check clippy test deny schemas pins
 
 # Cargo errors on a memberless virtual workspace, so the cargo recipes no-op
 # until the first crate lands in S1. `grep -c` prints 1 when packages is empty.
@@ -37,6 +37,13 @@ gate:
 # The safety gate over the whole corpus — reconverge only, NO GPU.
 prune cc="8.6":
     cargo run -q -p launchbound-cli -- prune --cc {{ cc }}
+
+# The six recorded pin sites agree with each other. No network: the
+# dispatch-only `pins.yml` asks upstream, this asks ourselves — and a
+# watcher whose own baseline is stale reports drift from a version nothing
+# installs, which is how #17 came to describe a pin two releases old.
+pins:
+    ./scripts/check-pins.sh
 
 # Golden + JSON Schema validation of report documents (S4).
 schemas:

@@ -32,7 +32,12 @@ impl RunDir {
             )));
         }
         let plan = BenchPlan::load(&dir.join("plan.json")).ok();
-        let results = Results::load(&dir.join("results.json"));
+        // A results.json that exists but cannot be read is an error, not
+        // "the box has not run yet". The two call for opposite actions —
+        // wait, or go and look — and rendering both as `unmeasured` at
+        // exit 0 told them apart for nobody. Same treatment `verdicts.v1`
+        // gets fifteen lines above.
+        let results = Results::load(&dir.join("results.json")).map_err(ReportError::RunDir)?;
         Ok(RunDir {
             verdicts,
             plan,

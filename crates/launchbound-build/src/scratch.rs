@@ -28,15 +28,88 @@ pub fn prepare_scratch(spec: &KernelSpec, scratch_root: &Path) -> Result<PathBuf
         let _ = std::fs::write(scratch.join("Cargo.lock"), lock);
     }
 
-    let src = kernel_dir.join("src");
-    for entry in std::fs::read_dir(&src).map_err(|e| BuildError::Scratch(e.to_string()))? {
-        let entry = entry.map_err(|e| BuildError::Scratch(e.to_string()))?;
-        if entry.path().is_file() {
-            std::fs::copy(entry.path(), scratch.join("src").join(entry.file_name()))
-                .map_err(|e| BuildError::Scratch(e.to_string()))?;
+    // Recursively, since 2.1.0. This took only the entries of `src/` that
+    // are files, so `mod util;` with `src/util/mod.rs` — how Rust code is
+    // organised past one file — produced a scratch crate that could not
+    // compile, and the gate reported `error: could not compile` against a
+    // crate whose own `cargo check` is clean. The message told its author to
+    // fix build errors they do not have, or to reinstall their toolchain,
+    // and never said the copy it compiled was not their crate.
+    copy_tree(
+        &kernel_dir.join("src"),
+        &scratch.join("src"),
+        &mut Vec::new(),
+    )?;
+
+    // Whatever `package.build` names, or `build.rs` beside the manifest —
+    // the same omission, one directory up.
+    let build_script = build_script_path(&manifest);
+    let from = kernel_dir.join(&build_script);
+    if from.is_file() {
+        let to = scratch.join(&build_script);
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| BuildError::Scratch(e.to_string()))?;
         }
+        std::fs::copy(&from, &to).map_err(|e| BuildError::Scratch(e.to_string()))?;
     }
     Ok(scratch)
+}
+
+/// Copy `from` into `to`, directories and all.
+///
+/// `target/` is skipped: a kernel crate that has been built has a build
+/// directory under `src/` only by accident, but copying one would be slow
+/// and pointless, and a symlink loop through it would not terminate.
+/// `visited` guards against a symlinked cycle anywhere else.
+fn copy_tree(from: &Path, to: &Path, visited: &mut Vec<PathBuf>) -> Result<(), BuildError> {
+    let canonical = from.canonicalize().unwrap_or_else(|_| from.to_path_buf());
+    if visited.contains(&canonical) {
+        return Ok(());
+    }
+    visited.push(canonical);
+
+    std::fs::create_dir_all(to).map_err(|e| BuildError::Scratch(e.to_string()))?;
+    for entry in std::fs::read_dir(from).map_err(|e| BuildError::Scratch(e.to_string()))? {
+        let entry = entry.map_err(|e| BuildError::Scratch(e.to_string()))?;
+        let name = entry.file_name();
+        if name == "target" {
+            continue;
+        }
+        let path = entry.path();
+        let target = to.join(&name);
+        if path.is_dir() {
+            copy_tree(&path, &target, visited)?;
+        } else {
+            std::fs::copy(&path, &target).map_err(|e| BuildError::Scratch(e.to_string()))?;
+        }
+    }
+    Ok(())
+}
+
+/// The build script this manifest declares, or `build.rs`.
+///
+/// Read from the text rather than from `cargo metadata`: `prepare_scratch`
+/// runs once per candidate and a metadata call per candidate is not worth
+/// the one field. `build = false` disables the script, and returning a path
+/// that does not exist is harmless — the caller only copies what is there.
+fn build_script_path(manifest: &str) -> PathBuf {
+    for line in manifest.lines() {
+        let line = line.trim();
+        let Some(value) = line.strip_prefix("build") else {
+            continue;
+        };
+        let Some(value) = value.trim_start().strip_prefix('=') else {
+            continue;
+        };
+        let value = value.trim();
+        if value == "false" {
+            return PathBuf::from("(disabled)");
+        }
+        if let Some(quoted) = value.strip_prefix('"').and_then(|v| v.split('"').next()) {
+            return PathBuf::from(quoted);
+        }
+    }
+    PathBuf::from("build.rs")
 }
 
 /// Default scratch root for a kernel: inside its own target dir

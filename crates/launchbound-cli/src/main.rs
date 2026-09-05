@@ -155,24 +155,80 @@ enum Command {
         /// Corpus root used to resolve kernel names.
         #[arg(long, default_value = "corpus")]
         corpus: PathBuf,
-        /// Re-verify the emitted specialization with cargo reconverge.
-        #[arg(long, default_value_t = true)]
+        /// Re-verify the emitted specialization through the gate. On by
+        /// default; `--no-verify` emits without it, and says so in the
+        /// output. Verification shells out to `cargo reconverge`, so a
+        /// machine that does not have the analyzer and the pinned toolchain
+        /// needs `--no-verify` to emit at all.
+        #[arg(long, action = clap::ArgAction::Set, default_value_t = true,
+              num_args = 0..=1, require_equals = false, default_missing_value = "true")]
         verify: bool,
+        /// Emit without re-verifying through the gate. The output carries a
+        /// notice saying nothing was checked.
+        #[arg(long, conflicts_with = "verify")]
+        no_verify: bool,
         /// Directory containing the cargo-reconverge binary.
         #[arg(long)]
         reconverge_dir: Option<PathBuf>,
     },
 }
 
-fn parse_budget(text: &str) -> anyhow::Result<f64> {
+/// A wall-clock budget in seconds, as typed at the command line.
+///
+/// Parsed rather than indexed. `split_at(text.len() - 1)` on a trimmed-empty
+/// argument is `0usize - 1`, so `--budget ""` and `--budget " "` panicked at
+/// exit 101 inside `core::str`.
+///
+/// The important half is what is *rejected*. `"NaN".parse::<f64>()` succeeds
+/// and so does `1e400` (as `inf`), and the guard that stops a sweep is
+/// `elapsed >= budget` — false for every value against NaN, and never true
+/// against infinity. So a value that looked accepted produced an
+/// **unbounded** measured sweep on real silicon, which is the one failure a
+/// budget exists to prevent. `is_finite()` and `> 0.0` close NaN, infinity
+/// and negatives together.
+///
+/// `--budget 0` stays valid and is not the same thing: the guard fires
+/// immediately and the run reports `budget exhausted after 0.0s`.
+fn parse_budget(text: &str) -> Result<f64, String> {
+    const ACCEPTED: &str = "expected a positive number of seconds, or a number with a \
+                            unit: `s` seconds, `m` minutes, `h` hours (e.g. `90s`, \
+                            `30m`, `1h`, or `45` for seconds)";
+
     let text = text.trim();
-    let (digits, unit) = text.split_at(text.len() - 1);
-    match unit {
-        "s" => Ok(digits.parse::<f64>()?),
-        "m" => Ok(digits.parse::<f64>()? * 60.0),
-        "h" => Ok(digits.parse::<f64>()? * 3600.0),
-        _ => Ok(text.parse::<f64>()?),
+    if text.is_empty() {
+        return Err(format!("--budget needs a value — {ACCEPTED}"));
     }
+
+    // Longest suffix first, so `min` is not read as `m` with `i` left over.
+    let (digits, multiplier) = [
+        ("hr", 3600.0),
+        ("h", 3600.0),
+        ("min", 60.0),
+        ("m", 60.0),
+        ("sec", 1.0),
+        ("s", 1.0),
+    ]
+    .into_iter()
+    .find_map(|(unit, multiplier)| text.strip_suffix(unit).map(|d| (d.trim(), multiplier)))
+    .unwrap_or((text, 1.0));
+
+    if digits.is_empty() {
+        return Err(format!("`{text}` is a unit with no number — {ACCEPTED}"));
+    }
+    let value: f64 = digits
+        .parse()
+        .map_err(|_| format!("`{text}` is not a valid --budget — {ACCEPTED}"))?;
+    if !value.is_finite() {
+        return Err(format!(
+            "`{text}` is not a finite budget — a sweep bounded by NaN or infinity is \
+             not bounded at all, which is the opposite of what --budget is for. \
+             {ACCEPTED}"
+        ));
+    }
+    if value < 0.0 {
+        return Err(format!("`{text}` is negative — {ACCEPTED}"));
+    }
+    Ok(value * multiplier)
 }
 
 /// A compute capability, as typed at the command line.
@@ -275,8 +331,9 @@ fn run() -> anyhow::Result<ExitCode> {
             kernel,
             corpus,
             verify,
+            no_verify,
             reconverge_dir,
-        } => cmd_apply(&run, &kernel, &corpus, verify, reconverge_dir),
+        } => cmd_apply(&run, &kernel, &corpus, verify && !no_verify, reconverge_dir),
         Command::Tune {
             kernel,
             corpus,
@@ -330,12 +387,67 @@ fn cmd_apply(
             )
         })?;
 
+    // Decide about verification BEFORE anything reaches stdout.
+    //
+    // This ran after the `params.rs` was printed, so "refusing to emit"
+    // arrived *after* the emission and a reader who had piped stdout to a
+    // file had the file. A refusal has to be a refusal.
+    //
+    // The Metal path has no convergence gate at all — deliberately, and
+    // `report` says so on every render — so a Metal run records
+    // `gate_cc: "metal"`, a sentinel rather than a compute capability.
+    // Handing that to reconverge got the correct answer to the wrong
+    // question ("`metal` is not a compute capability") dressed as a
+    // regression ("no longer passes the gate"). Nothing regressed: on this
+    // path the gate never ran and cannot.
+    let ungated = !report.gate_cc.contains('.');
+    if verify && ungated {
+        anyhow::bail!(
+            "this run was measured on the {} path, which has no convergence gate \
+             (docs/SAFETY.md) — there is no gate verdict to re-verify, and \
+             `{}` is not a compute capability to run one at.\n\n  \
+             Emit anyway, with the notice, using `--no-verify`; or re-run the \
+             configuration through `launchbound prune --cc <target>` for the \
+             part you will deploy on.",
+            report.gate_cc,
+            report.gate_cc,
+        );
+    }
+
     // Render the winning params.rs through the same specializer that built
     // the measured artifact: what you paste is what was measured.
     let scratch_root = launchbound_build::scratch::default_scratch_root(&spec);
     let scratch = launchbound_build::scratch::prepare_scratch(&spec, &scratch_root)?;
     launchbound_build::scratch::write_params(&spec, &config, &scratch)?;
     let params = std::fs::read_to_string(scratch.join("src/params.rs"))?;
+
+    if verify {
+        eprintln!("verifying the emitted specialization with cargo reconverge --strict ...");
+        let verdicts = launchbound_prune::prune_kernel(
+            &spec,
+            &launchbound_prune::PruneOptions {
+                cc: report.gate_cc.clone(),
+                reconverge_dir,
+                scratch_root: None,
+            },
+        )?;
+        let cv = verdicts
+            .iter()
+            .find(|cv| cv.config.id().as_str() == chosen.id)
+            .ok_or_else(|| anyhow::anyhow!("chosen config missing from prune output"))?;
+        match &cv.verdict {
+            launchbound_prune::Verdict::Clean => {
+                eprintln!("verified: clean under the gate at cc {}", report.gate_cc)
+            }
+            launchbound_prune::Verdict::AdmittedWithCaveats { .. } => {
+                eprintln!("verified: admitted with caveats (see the report)")
+            }
+            // `{other}`, not `{other:?}`: this reaches a person.
+            other => anyhow::bail!(
+                "the chosen configuration does not pass the gate — refusing to emit:\n{other}"
+            ),
+        }
+    }
 
     let block: Vec<String> = ["block_x", "block_y", "block_z"]
         .iter()
@@ -365,35 +477,24 @@ fn cmd_apply(
         spec.domain
     );
     println!("// This result is valid only for the part above; it does not port across parts.");
+    if !verify {
+        // Carried into the output the way the Metal notice is, so the
+        // qualification travels with the thing it qualifies: a `params.rs`
+        // pasted into a repository outlives the terminal it was printed in.
+        println!("// *** NOT VERIFIED: verification was turned off, so the gate did not");
+        println!("// *** re-check this configuration. Run `launchbound prune --cc <target>`");
+        println!("// *** before you rely on it.");
+    }
+    if ungated {
+        println!(
+            "// *** NO convergence gate exists on the {} path: the same bug class is",
+            report.gate_cc
+        );
+        println!("// *** NOT checked (docs/SAFETY.md).");
+    }
     println!("// ---- src/params.rs ----");
     print!("{params}");
 
-    if verify {
-        eprintln!("verifying the emitted specialization with cargo reconverge --strict ...");
-        let verdicts = launchbound_prune::prune_kernel(
-            &spec,
-            &launchbound_prune::PruneOptions {
-                cc: report.gate_cc.clone(),
-                reconverge_dir,
-                scratch_root: None,
-            },
-        )?;
-        let cv = verdicts
-            .iter()
-            .find(|cv| cv.config.id().as_str() == chosen.id)
-            .ok_or_else(|| anyhow::anyhow!("chosen config missing from prune output"))?;
-        match &cv.verdict {
-            launchbound_prune::Verdict::Clean => {
-                eprintln!("verified: clean under the gate at cc {}", report.gate_cc)
-            }
-            launchbound_prune::Verdict::AdmittedWithCaveats { .. } => {
-                eprintln!("verified: admitted with caveats (see the report)")
-            }
-            other => anyhow::bail!(
-                "the chosen configuration no longer passes the gate: {other:?} — refusing to emit"
-            ),
-        }
-    }
     Ok(ExitCode::SUCCESS)
 }
 
@@ -409,7 +510,18 @@ fn cmd_tune(
     seed: u64,
     reconverge_dir: Option<PathBuf>,
 ) -> anyhow::Result<ExitCode> {
-    let budget_secs = budget.map(parse_budget).transpose()?;
+    let budget_secs = budget
+        .map(parse_budget)
+        .transpose()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    // On any backend: an exhaustive sweep makes no random choice, so there
+    // is nothing for a seed to control.
+    if backend != "model" && order == "exhaustive" && seed != 0 {
+        eprintln!(
+            "note: --seed has no effect with --order exhaustive — every candidate is \
+             measured, in order, so there is no sampling to seed."
+        );
+    }
     let dir = resolve_kernel_dirs(Some(kernel), corpus)?.remove(0);
     let spec = KernelSpec::load(&dir)?;
     let explicit_out = out.is_some();
@@ -460,11 +572,28 @@ fn cmd_tune(
         "model" => {
             // Nothing is written on this path, so an --out the caller took
             // the trouble to type is worth answering rather than ignoring.
+            // The same reasoning for the three below: a flag accepted and
+            // silently ignored is a promise the tool does not keep, and
+            // `--budget` is the one that matters — somebody who passes
+            // `--budget 30m` reasonably believes something is bounded.
             if explicit_out {
                 eprintln!(
                     "note: --out is unused with --backend model — it prints the ranking and \
                      writes no run directory. `launchbound stage` writes one that \
                      `launchbound report` can read."
+                );
+            }
+            if budget.is_some() {
+                eprintln!(
+                    "note: --budget is unused with --backend model — nothing is measured, \
+                     so there is no sweep to bound. `--backend cuda` and `--backend metal` \
+                     honour it."
+                );
+            }
+            if order != "exhaustive" || seed != 0 {
+                eprintln!(
+                    "note: --order and --seed are unused with --backend model — the ranking \
+                     is analytic and always in cost order."
                 );
             }
             use launchbound_model::{device, estimate};
@@ -599,8 +728,17 @@ fn cmd_model(
     }
 
     if let Some(results_path) = results {
+        // The cause, not "cannot read": a truncated file, a `results.v2`
+        // and a path that is simply not there are three different problems
+        // and used to share one message.
         let measured = launchbound_bench::Results::load(&results_path)
-            .ok_or_else(|| anyhow::anyhow!("cannot read results.v1 at {results_path:?}"))?;
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{}: no results.v1 there — the measurement box has not written one yet",
+                    results_path.display()
+                )
+            })?;
         let mut xs = Vec::new(); // model cost
         let mut ys = Vec::new(); // measured median
         for est in &estimates {
@@ -1045,4 +1183,59 @@ fn cmd_space(
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::parse_budget;
+
+    #[test]
+    fn accepted_forms_are_seconds() {
+        for (input, seconds) in [
+            ("45", 45.0),
+            ("90s", 90.0),
+            ("30m", 1800.0),
+            ("30min", 1800.0),
+            ("1h", 3600.0),
+            ("1hr", 3600.0),
+            ("2sec", 2.0),
+            ("  90s  ", 90.0),
+            // Zero is a budget, and a meaningful one: the guard fires at
+            // once and the run says how far it got.
+            ("0", 0.0),
+        ] {
+            assert_eq!(parse_budget(input), Ok(seconds), "{input}");
+        }
+    }
+
+    #[test]
+    fn nothing_unbounded_or_unparseable_is_accepted() {
+        // The first two used to panic at exit 101; the two after them used
+        // to be accepted and produce an unbounded sweep.
+        for input in ["", "   ", "NaNs", "1e400s", "inf", "-5s", "abc", "s", "min"] {
+            let err = parse_budget(input).unwrap_err();
+            assert!(
+                err.contains("--budget") || err.contains(&format!("`{}`", input.trim())),
+                "{input}: the message must name the flag or the value: {err}"
+            );
+            assert!(
+                err.contains("expected a positive number of seconds"),
+                "{input}: and say what would have been accepted: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_budget_that_parses_can_actually_bound_a_sweep() {
+        // The property the guard needs, stated where it can fail: `x >= NaN`
+        // is false for every x, and nothing is ever `>= inf`.
+        for input in ["0", "45", "90s", "30m", "1h"] {
+            let seconds = parse_budget(input).unwrap();
+            assert!(seconds.is_finite() && seconds >= 0.0, "{input}");
+            assert!(
+                f64::MAX >= seconds,
+                "{input}: an elapsed time must be able to reach it"
+            );
+        }
+    }
 }

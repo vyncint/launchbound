@@ -89,15 +89,19 @@ pub fn run_plan(
         ));
     }
 
-    let mut results = match Results::load(results_path) {
-        Some(existing) if existing.schema == "results.v1" => {
+    // A checkpoint that cannot be read is not "start over": resuming would
+    // silently discard measurements that cost GPU time, and the file is the
+    // only record of them. Say what is wrong and stop.
+    let existing = Results::load(results_path)?;
+    let mut results = match existing {
+        Some(existing) => {
             progress(&format!(
                 "resuming: {} candidates already measured",
                 existing.candidates.len()
             ));
             existing
         }
-        _ => Results {
+        None => Results {
             schema: "results.v1".into(),
             kernel: plan.kernel.clone(),
             entry: plan.entry.clone(),
@@ -364,9 +368,57 @@ fn deterministic_u32(len: u64, modulo: u64) -> Vec<u32> {
 }
 
 impl Results {
-    pub fn load(path: &Path) -> Option<Self> {
-        let text = std::fs::read_to_string(path).ok()?;
-        serde_json::from_str(&text).ok()
+    /// Read `results.v1` from a run directory.
+    ///
+    /// `Ok(None)` means one thing only: **the file is not there**, so the
+    /// measurement box has not run yet. Everything else is an error.
+    ///
+    /// This used to be `read_to_string(path).ok()?` then `from_str().ok()`,
+    /// so a truncated file, an empty one, `null`, `[]`, a `results.v2` from
+    /// a newer runner and a *directory* named `results.json` all collapsed
+    /// into that same `None` — and `report` rendered "nothing measured yet",
+    /// exit 0, nothing on stderr, with a JSON report that validated. The run
+    /// directory is the hand-off between two machines, and the two
+    /// conditions call for opposite actions: wait, or go and look. Nothing
+    /// told them apart.
+    ///
+    /// `verdicts.v1` two lines away in the report builder already checked
+    /// its schema tag by name; this is the same check, so a future
+    /// `results.v2` is refused by name rather than read as nothing.
+    ///
+    /// # Errors
+    ///
+    /// Any I/O error that is not `NotFound`, any parse failure, and any
+    /// document whose `schema` is not `results.v1` — each naming the path.
+    pub fn load(path: &Path) -> Result<Option<Self>, String> {
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        };
+        // The tag first, so a wrong-schema document is named as one rather
+        // than as whatever field happens to be missing from it.
+        let value: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|e| format!("{}: not JSON: {e}", path.display()))?;
+        let declared = value.get("schema").and_then(|s| s.as_str());
+        match declared {
+            Some("results.v1") => {}
+            Some(other) => {
+                return Err(format!(
+                    "{}: unsupported results schema `{other}` (expected `results.v1`)",
+                    path.display()
+                ));
+            }
+            None => {
+                return Err(format!(
+                    "{}: not a results.v1 document (no `schema` field)",
+                    path.display()
+                ));
+            }
+        }
+        serde_json::from_str(&text)
+            .map(Some)
+            .map_err(|e| format!("{}: not a results.v1 document: {e}", path.display()))
     }
 
     /// Atomic checkpoint: write to a temp file, then rename.
