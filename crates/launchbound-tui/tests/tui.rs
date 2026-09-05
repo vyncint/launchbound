@@ -263,3 +263,69 @@ fn no_golden_line_is_cut_at_the_panel_border() {
     }
     assert!(checked > 0, "no goldens found in {dir:?}");
 }
+
+/// The refusal reason reaches the reader whole, at a width where it does not
+/// fit on one row.
+///
+/// This is a property of the rendered grid, which is why it is here and not
+/// a string assertion: the reason is *wrapped* across rows now, so the
+/// sentence exists only as a sequence of cells. At eighty columns the reader
+/// used to get `splits a 64-threa` and never reach `safe only at one warp
+/// (<= 32 threads)` — the only part that says what to do about the refusal —
+/// with nothing marking the cut, so it read as the whole reason.
+///
+/// Narrower than the goldens on purpose: 60 columns is where wrapping has to
+/// do real work, and the golden suite has no frame there.
+#[test]
+fn a_refusal_reason_survives_a_narrow_terminal_whole() {
+    let mut t = spawn((60, 30));
+    // NOT `ready`: that predicate looks for the footer's `q quit`, and at
+    // sixty columns the footer itself is cut before it reaches those words.
+    // A readiness marker has to hold at the width being tested, which is
+    // the sort of thing only a narrow-terminal test finds out.
+    t.wait_frame(|s| s.to_string().contains("candidates ·"))
+        .expect("the first complete frame");
+    t.send(Key::Char('3')).expect("send 3");
+    let frame = t
+        .wait_frame(|s| s.to_string().contains("all refused configurations:"))
+        .expect("the rejections view");
+
+    // Rebuild the panel's prose from the grid: wrapping breaks at spaces, so
+    // joining the rows and collapsing whitespace recovers the sentence.
+    let joined = frame
+        .to_string()
+        .lines()
+        .map(|line| line.trim_matches(['│', ' ']))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let prose: String = joined.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    assert!(
+        prose.contains("safe only at one warp (<= 32 threads)"),
+        "the actionable clause must reach the reader at 60 columns:\n{frame}"
+    );
+    assert!(
+        prose.contains("divergence source `warp_id()` splits a 64-thread block"),
+        "and so must the rest of the reason:\n{frame}"
+    );
+
+    // And nothing is cut at the border. The same rule the golden scan
+    // applies, asserted here against a live grid at a width no golden covers.
+    for row in 0..frame.rows() {
+        let text = frame.row_text(row);
+        let Some(inner) = text.strip_suffix('│').and_then(|t| t.strip_prefix('│')) else {
+            continue;
+        };
+        if inner.chars().all(|c| c == '─' || c == ' ') {
+            continue;
+        }
+        if let Some(last) = inner.chars().next_back() {
+            assert!(
+                last == '…' || !(last.is_ascii_digit() || matches!(last, ',' | '[' | '(' | '=')),
+                "row {row} is cut at the border (ends {last:?}):\n{frame}"
+            );
+        }
+    }
+
+    quit(t, "narrow rejections");
+}
