@@ -7,7 +7,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
@@ -132,10 +132,37 @@ fn chosen_tail(
     hi_ms: f64,
     panel_width: u16,
 ) -> String {
+    interval_tail(
+        id,
+        config,
+        median_ms,
+        lo_ms,
+        hi_ms,
+        panel_width,
+        CHOSEN_LABEL.len(),
+    )
+}
+
+/// `id  config  time [lo, hi]`, with the interval only if it fits whole.
+///
+/// `prefix` is what the caller puts in front of it — the `CHOSEN  ` label,
+/// or a one-character marker and a space in the ranking. Shared so the two
+/// views cannot disagree about when an interval is dropped, which is how
+/// this defect came to be fixed in one view and left standing in the other.
+#[allow(clippy::too_many_arguments)]
+fn interval_tail(
+    id: &str,
+    config: &str,
+    median_ms: f64,
+    lo_ms: f64,
+    hi_ms: f64,
+    panel_width: u16,
+    prefix: usize,
+) -> String {
     let without = format!("{id}  {config}  {median_ms:.4} ms");
     let with = format!("{without} [{lo_ms:.4}, {hi_ms:.4}]");
     // The panel's two border columns are not text.
-    let usable = usize::from(panel_width).saturating_sub(2 + CHOSEN_LABEL.len());
+    let usable = usize::from(panel_width).saturating_sub(2 + prefix);
     if with.chars().count() <= usable {
         with
     } else {
@@ -295,9 +322,22 @@ fn draw_ranking(frame: &mut Frame<'_>, app: &App, area: Rect) {
             } else {
                 " "
             };
+            // Same precedence as the chosen line, and the same reason: at
+            // eighty columns every row here lost its closing bracket, so
+            // each interval read as a number with no upper bound. The id,
+            // the config and the time outrank the interval; a reader who
+            // needs it has a wider terminal.
             ListItem::new(format!(
-                "{marker} {}  {}  {:.4} ms [{:.4}, {:.4}]",
-                c.id, c.config, s.median_ms, s.ci95_lo_ms, s.ci95_hi_ms
+                "{marker} {}",
+                interval_tail(
+                    &c.id,
+                    &c.config,
+                    s.median_ms,
+                    s.ci95_lo_ms,
+                    s.ci95_hi_ms,
+                    area.width,
+                    2, // the marker and the space after it
+                )
             ))
         })
         .collect();
@@ -357,7 +397,19 @@ fn draw_rejections(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
     let visible: Vec<Line<'_>> = lines.into_iter().skip(app.scroll).collect();
     frame.render_widget(
-        Paragraph::new(visible).block(Block::default().borders(Borders::ALL).title("rejections")),
+        Paragraph::new(visible)
+            .block(Block::default().borders(Borders::ALL).title("rejections"))
+            // Wrapped, not shortened. A rejection reason is a sentence, and
+            // its actionable clause is at the end: the reader used to get as
+            // far as `splits a 64-threa` and never reach `safe only at one
+            // warp (<= 32 threads)`, which is the only part that says what to
+            // do. Nothing marked the cut, so it read as the whole reason. An
+            // interval can be dropped whole because it is a field; a sentence
+            // cannot, so this panel spends the two or three rows instead.
+            //
+            // `trim: false` keeps the leading indentation that distinguishes
+            // a reason from the configuration line above it.
+            .wrap(Wrap { trim: false }),
         area,
     );
 }

@@ -9,6 +9,137 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-05
+
+Thirteen findings, all reported against 2.0.0 with a measured reproduction.
+Most of them reduce to one shape: something was consumed on a contract other
+than the one it is written to, and the mismatch was reported as a fault of
+whatever it was pointed at.
+
+### Changed
+
+- **The lockstep pins move to reconverge 0.5.0**, at every recorded site.
+  2.0.0 moved the gate to 0.4.0 and updated four of the six the policy
+  names, so `rust-toolchain.toml`, `CONTRIBUTING.md` and `pins.yml` still
+  recorded 0.1.11 — and `pins.yml` measures upstream drift against its own
+  `RECONVERGE_PIN`, so its weekly signal reported movement away from a
+  version nothing installs. That is why #17 sat open describing a pin two
+  releases old. `just pins` now asserts the sites agree with each other,
+  with no network, before anything asks upstream. Reported in #46 and #17.
+
+- **`apply --verify` is a real switch.** It was a `bool` with
+  `default_value_t = true`, which clap gives a `SetTrue` action — so
+  `--verify` set what was already set, `--no-verify` was an unknown
+  argument, and the help read as an opt-in for something mandatory. There
+  is a `--no-verify` now, and the help says verification is on. This is
+  what makes `apply` usable on a machine that has the run directory but not
+  the analyzer and the pinned toolchain. Reported in #36.
+
+- **`prune`'s verdict line says what it checked.** The gate answers
+  convergence and static shared-memory capacity at a `--cc`; it has no view
+  of instruction availability, so a crate using an `sm_80+` intrinsic under
+  `needs_cc = "7.5"` prunes to `12 clean` at `--cc 7.5` and fails only when
+  something finally lowers it for that part. `needs_cc` is the author's
+  claim and is taken on trust — defensible, and nowhere stated, so "clean"
+  read as "this kernel is fine at cc 7.5". docs/LIMITATIONS.md carries the
+  long form, including why the two stronger fixes were not built. Reported
+  in #32.
+
+### Fixed
+
+- **A kernel crate with a bin target no longer hard-stops the gate.**
+  reconverge prints one `findings.v1` document per analyzed target — its
+  documented contract — and this reader handed the whole of stdout to a
+  single `from_str`, so a `src/main.rs` beside a kernel library, the
+  ordinary shape of a GPU crate, made every candidate a tool error at
+  `trailing characters at line 2 column 1`. In the Action `fail-on`
+  defaults to `tool-error`, so CI went red for a crate with nothing wrong
+  with it, pointing at the analyzer's tracker. Stdout is read as JSONL and
+  the findings are unioned: a deny finding in any target refuses, and the
+  bin target's document is harmless to merge. The fail-safe always held —
+  it held against a format the analyzer documents. Reported in #42.
+
+- **The scratch copy is the whole crate.** It took only the entries of
+  `src/` that are files, so `mod util;` with `src/util/mod.rs` — how Rust
+  code is organised past one file — produced a scratch crate that could not
+  compile, and the gate reported `error: could not compile` against a crate
+  whose own `cargo check` is clean. The message told its author to fix
+  build errors they do not have, or to reinstall their toolchain, and never
+  said that what it compiled was not their crate. It copies recursively
+  now, carries `build.rs` or whatever `package.build` names, skips
+  `target/`, and a tool error names the scratch directory. Reported in #43.
+
+- **rustc's diagnostics survive the tool-error filter.** #19 replaced a
+  tail-six heuristic with a filter on marked lines, and picked the
+  *secondary* marker: rustc's primary diagnostics begin `error[E0583]:`,
+  a code before the colon. So what survived was cargo's summary and
+  reconverge's generic hint — "see the errors above", with the one that was
+  above removed. Both forms are accepted now, here and in the compile
+  executor, which still had the tail heuristic #19 removed next door.
+  Reported in #44.
+
+- **`--budget` cannot be given a value that fails to bound anything.**
+  `split_at(text.len() - 1)` on a trimmed-empty argument is `0usize - 1`,
+  so `--budget ""` panicked at exit 101. Worse: `NaN` and `1e400` parsed,
+  and the guard is `elapsed >= budget` — false for every value against NaN,
+  never true against infinity — so a value that looked accepted produced an
+  **unbounded** measured sweep on real silicon, which is the one failure a
+  budget exists to prevent. Non-finite and negative values are rejected,
+  the message names the flag and the accepted forms, and `min`/`hr` are
+  accepted alongside `m`/`h` because that is what people type. `--budget 0`
+  stays valid and means what it always did. Reported in #33.
+
+- **`apply` decides about verification before it prints anything.** It
+  emitted the `params.rs` and *then* verified, so "refusing to emit"
+  arrived after the emission and a reader who had piped stdout to a file
+  had the file. On a Metal run it could never succeed at all: that path has
+  no convergence gate, deliberately, so the run records `gate_cc: "metal"`,
+  and handing that sentinel to reconverge produced the correct answer to
+  the wrong question ("`metal` is not a compute capability") dressed as a
+  regression ("no longer passes the gate"). Nothing regressed; the gate
+  never ran and cannot. It refuses by name now, before stdout, and points
+  at `--no-verify` or `prune --cc <target>`. `Verdict` has a `Display`, so
+  no user-facing message is a Rust struct literal. Reported in #34.
+
+- **A `results.json` the report cannot read is an error, not "unmeasured".**
+  A truncated file, an empty one, `null`, `[]`, a `results.v2` from a newer
+  runner and a *directory* named `results.json` all rendered as "nothing
+  measured yet": exit 0, nothing on stderr, and a JSON report that
+  validated against the schema. The run directory is the hand-off between
+  two machines and those two conditions call for opposite actions — wait,
+  or go and look. Only `NotFound` is `Ok(None)` now; everything else names
+  the path and the cause, the way `verdicts.v1` already did fifteen lines
+  away in the same function. `model --results` names the cause too, and
+  `tune`'s end-of-run report inherits all of it. Reported in #45.
+
+- **Nothing is cut mid-value or mid-word at the panel border.** #24 fixed
+  this on the chosen line and left it in the two views below: the ranking
+  lost every closing bracket at eighty columns, so each interval read as a
+  number with no upper bound, and the rejections view — the one the README
+  calls the point of the tool — lost the clause that says what to do,
+  stopping at `splits a 64-threa` and never reaching `safe only at one warp
+  (<= 32 threads)`. An interval is a field and is dropped whole through the
+  same helper the chosen line uses; a reason is a sentence and wraps. A
+  scan over every golden now fails on a value or a word ending at the
+  border without an ellipsis — confirmed red against the shipped pre-fix
+  frames, and it would have caught #24. Reported in #35.
+
+- **A missing `cargo oxide` is diagnosed by name.** cargo's own help
+  relayed `cargo search cargo-oxide`, and cargo-oxide is not on crates.io:
+  cuda-oxide is a pinned git checkout. The one actionable-looking line sent
+  the reader to a package that does not exist, on the first wall of `stage`
+  and `tune --backend cuda`. The message now names the pin, gives the three
+  commands CI uses, and says that `prune` needs none of it. The pin is a
+  constant `just pins` checks, so a bump moves the message with it. In the
+  same path, `exit Some(101)` is an exit code again and the compile failure
+  reports the compiler's errors rather than its summary. Reported in #37.
+
+- **No flag on `tune` is accepted and silently ignored.** `--budget`,
+  `--order` and `--seed` are inert with `--backend model`, and `--seed` is
+  inert with `--order exhaustive` on any backend. Each says so once, the
+  way `--out` has since #22 — somebody who passes `--budget 30m` reasonably
+  believes something is bounded. Reported in #38.
+
 ## [2.0.0] - 2026-08-26
 
 A major, and both reasons are in the "breaking" list this project keeps in

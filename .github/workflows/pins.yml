@@ -21,7 +21,7 @@ permissions:
 env:
   CUDA_OXIDE_PIN: 50d07314eb8b7d5ec821ba02b0048a753c20dd4e
   CUDA_OXIDE_REPO: NVlabs/cuda-oxide
-  RECONVERGE_PIN: v0.1.11
+  RECONVERGE_PIN: v0.5.0
   RECONVERGE_REPO: vyncint/reconverge
 
 jobs:

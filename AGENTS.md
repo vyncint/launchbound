@@ -19,8 +19,9 @@ is the full contributor document and wins wherever the two disagree.
 ## Build and test
 
 ```sh
-just ci                       # fmt, clippy, test, deny, schemas
+just ci                       # fmt, clippy, test, deny, schemas, pins
 cargo test --workspace        # no GPU, no network, no checkout needed
+just pins                     # the recorded pin sites agree — no network
 just gate                     # the gate tests — needs cargo-reconverge + cuda-oxide
 ```
 
@@ -33,7 +34,23 @@ MSRV 1.88 for everything that does not need it.
   gate and runs on any laptop; that is why it is its own verb. Do not write a
   test that needs silicon when the gate does not.
 - **Goldens:** regenerate with `LAUNCHBOUND_BLESS=1 cargo test -p launchbound-tui
-  --test tui`, then read every diff.
+  --test tui`, then read every diff. A golden is a recording of shipped
+  behaviour, so `no_golden_line_is_cut_at_the_panel_border` scans them all:
+  a value or a word ending at the panel border, without an ellipsis, is a
+  truncation bug. Three views had one and two were fixed separately before
+  that scan existed.
+- **PTY tests follow the termlens skill**, vendored at
+  `.claude/skills/termlens/SKILL.md`: content-based waits only, never a
+  sleep; one predicate per instant, and one-directional, so a frame cannot
+  satisfy both waits of a resize; `(cols, rows)` for a size and
+  `(row, col)` for a cell. A readiness predicate has to hold at the width
+  under test — `ready` looks for the footer's `q quit`, which is cut at
+  sixty columns.
+- **The pins move together or not at all**, and `just pins` checks that the
+  recorded sites agree before anything asks upstream. 2.0.0 moved four of
+  six, which left `pins.yml` measuring drift from a version nothing
+  installs — a watcher with a stale baseline produces noise that looks like
+  a finding.
 - **A model-derived ranking is never presented as a measurement.** Anything
   estimated says so on every surface it reaches. This is the project's central
   honesty claim — do not blur it to make output tidier.

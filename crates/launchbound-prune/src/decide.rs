@@ -41,6 +41,41 @@ pub enum Verdict {
     ToolError { detail: String },
 }
 
+impl std::fmt::Display for Verdict {
+    /// Prose, because these reach a user.
+    ///
+    /// `apply` printed `ToolError { detail: "…\n…" }` — a Rust struct
+    /// literal with escaped newlines — in a message somebody is meant to act
+    /// on. A `Debug` dump is a fine thing to log and a poor thing to read.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Verdict::Clean => write!(f, "clean"),
+            Verdict::AdmittedWithCaveats { caveats } => {
+                write!(f, "admitted with {} caveat", caveats.len())?;
+                if caveats.len() != 1 {
+                    write!(f, "s")?;
+                }
+                for caveat in caveats {
+                    write!(f, "\n  {} {}", caveat.rule, caveat.message)?;
+                }
+                Ok(())
+            }
+            Verdict::Disqualified { records } => {
+                write!(f, "refused by the gate")?;
+                for record in records {
+                    write!(f, "\n  {} ", record.rule)?;
+                    if let Some(span) = &record.span {
+                        write!(f, "at {span}: ")?;
+                    }
+                    write!(f, "{}", record.reason)?;
+                }
+                Ok(())
+            }
+            Verdict::ToolError { detail } => write!(f, "{detail}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RejectionRecord {
     pub rule: String,

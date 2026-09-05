@@ -134,7 +134,7 @@ launchbound prune  <kernel> --cc 8.6 [--json]         # reconverge pass only —
 launchbound model  <kernel> --cc 8.6                  # analytical ranking — NOT GATED
 launchbound tune   <kernel> --cc 8.6 --backend cuda|metal|model [--budget 30m]
 launchbound report <run> [--json] [--rejected]        # includes refused-but-faster configs
-launchbound apply  <run>                              # emit the cuda-oxide policy specialization
+launchbound apply  <run> [--no-verify]                # emit the cuda-oxide policy specialization
 launchbound-tui    <run>                              # the run in four views: the chosen
                                                       # configuration and the field it beat,
                                                       # the ranking, the refusals, the progress
@@ -144,6 +144,18 @@ launchbound-tui    <run>                              # the run in four views: t
 compute capability does not transfer to another, and `tune` is the command
 whose answer you act on. The CUDA spellings work: `--cc 86` and `--cc sm_86`
 mean `8.6`.
+
+`prune --cc` answers two questions at that capability — does the launch
+shape make a barrier or a collective non-convergent, and does the static
+shared memory fit — and its verdict line says so. It has **no view of
+instruction availability**: whether the device code can be lowered for that
+part at all is `needs_cc` in `kernel.toml`, the author's claim, taken on
+trust ([docs/LIMITATIONS.md](docs/LIMITATIONS.md)).
+
+`apply` re-verifies what it emits through the gate before printing anything.
+`--no-verify` emits without it — for a machine that has the run directory
+but not the analyzer, and for a Metal run, which has no convergence gate to
+re-verify against — and the output carries a notice saying so.
 
 `model` ranks the **whole** space and says so: it runs no gate and needs no
 `reconverge`, so its fastest row may be a configuration that hangs. `tune

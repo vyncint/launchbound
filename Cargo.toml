@@ -20,7 +20,7 @@ members = [
 exclude = ["corpus"]
 
 [workspace.package]
-version = "2.0.0"
+version = "2.1.0"
 edition = "2024"
 # MSRV for crates that do not require the pinned nightly (CONTRIBUTING.md);
 # set by ratatui 0.30. The analysis and compile paths require

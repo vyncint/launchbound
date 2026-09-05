@@ -6,7 +6,7 @@ launchbound's, with numbers where we have them. Everything here was true on
 
 ## The gate inherits reconverge's limits, wholesale
 
-A clean gate is **not a proof of correctness**. `reconverge` (v0.4.0) is
+A clean gate is **not a proof of correctness**. `reconverge` (v0.5.0) is
 summary-based and interprocedural, handles reducible control flow only,
 cannot evaluate non-literal masks, and puts data races entirely out of
 scope. Its own documentation is the authority; launchbound adds no analysis
@@ -19,6 +19,35 @@ measured flipping (11 of 147 cases, all `warp_id()`), and the only one this
 project's corpus reproduces. A launch-shape-dependent hazard from a source
 the classifier does not recognize would be admitted **with a caveat**, not
 refused.
+
+## `--cc` is a convergence and capacity question, not a lowering one
+
+The gate answers two questions at a compute capability: does the launch
+shape make a barrier or a collective non-convergent, and does the static
+shared memory fit. It has **no view of instruction availability**, so a
+kernel whose device code cannot be lowered for that part at all is admitted
+without a word.
+
+The reported case: every float intrinsic in cuda-oxide's catalog at the
+current pin (`ex2`, `lg2`, `rcp`, `tanh` approx variants) is `sm_80+`. A
+crate using one of them with `needs_cc = "7.5"` in `kernel.toml` prunes to
+`12 clean` at `--cc 7.5`, and only fails when something finally lowers it:
+
+```
+$ cargo oxide inspect --arch sm_75
+error: CUDA target sm_75 cannot lower generated intrinsic `ex2_approx_f32`;
+       requires sm_80 or newer
+```
+
+`needs_cc` is the author's claim and the gate takes it on trust. Since 2.1.0
+the verdict line says so, so "3 clean" no longer reads as "this kernel is
+fine at cc 7.5". What would close the gap is a `cargo oxide build --arch
+sm_XY` probe per candidate — which needs a toolkit, and `prune` is
+deliberately the part a laptop can run. A static scan of the crate against
+the catalog's `Available on sm_NN+` lines is the cheaper half and is not
+built: it would need the catalog, which is the sibling checkout `prune`
+exists not to require, and an embedded copy of it would go stale silently —
+which is the failure mode this document is about.
 
 ## The Metal path has no gate at all
 

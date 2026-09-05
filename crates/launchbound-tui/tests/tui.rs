@@ -200,3 +200,132 @@ fn stress_100_runs_at_80x24() {
         quit(t, &format!("run {run}"));
     }
 }
+
+/// No shipped frame is cut mid-value or mid-word without an ellipsis.
+///
+/// Three views had this defect and two were fixed one at a time: #24 took
+/// the chosen line, and the ranking and rejection views kept it — the
+/// ranking losing every closing bracket, so each interval read as a number
+/// with no upper bound, and the rejections losing the clause that says what
+/// to do about the refusal. A golden is a recording of shipped behaviour,
+/// so the goldens are where the scan belongs.
+///
+/// The rule is what a rendered field may *end* with at the panel border. A
+/// digit, `,`, `[`, `(`, `=` or `-` there means the value continued and was
+/// cut; a letter means a word was. An ellipsis is allowed: a marked
+/// shortening is a choice, and an unmarked one is a bug.
+#[test]
+fn no_golden_line_is_cut_at_the_panel_border() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let mut checked = 0;
+    for entry in fs::read_dir(&dir).expect("tests/golden must exist") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = fs::read_to_string(&path).unwrap();
+        for (number, line) in text.lines().enumerate() {
+            // Only rows that reach a right border can be cut by one.
+            let Some(inner) = line.strip_suffix('│') else {
+                continue;
+            };
+            let Some(inner) = inner.strip_prefix('│') else {
+                continue;
+            };
+            let Some(last) = inner.chars().next_back() else {
+                continue;
+            };
+            // A box-drawing row is the border itself, not content.
+            if inner.chars().all(|c| c == '─' || c == ' ') {
+                continue;
+            }
+            if last == '…' {
+                continue;
+            }
+            let cut = last.is_ascii_digit() || matches!(last, ',' | '[' | '(' | '=' | '-');
+            assert!(
+                !cut,
+                "{name}:{}: a value is cut at the panel border (ends {last:?}):\n{line}",
+                number + 1
+            );
+            // A word cut mid-way. A field that legitimately ends in a letter
+            // (`ms`, a kernel name) is indistinguishable from a truncated
+            // one by the last character alone, so this only fires when the
+            // row is full to the border AND the last word is long enough to
+            // be a sentence rather than a unit.
+            let full = inner.chars().count() >= 76;
+            let tail = inner.split_whitespace().next_back().unwrap_or("");
+            assert!(
+                !(full && last.is_alphabetic() && tail.len() > 6),
+                "{name}:{}: a word is cut at the panel border ({tail:?}):\n{line}",
+                number + 1
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "no goldens found in {dir:?}");
+}
+
+/// The refusal reason reaches the reader whole, at a width where it does not
+/// fit on one row.
+///
+/// This is a property of the rendered grid, which is why it is here and not
+/// a string assertion: the reason is *wrapped* across rows now, so the
+/// sentence exists only as a sequence of cells. At eighty columns the reader
+/// used to get `splits a 64-threa` and never reach `safe only at one warp
+/// (<= 32 threads)` — the only part that says what to do about the refusal —
+/// with nothing marking the cut, so it read as the whole reason.
+///
+/// Narrower than the goldens on purpose: 60 columns is where wrapping has to
+/// do real work, and the golden suite has no frame there.
+#[test]
+fn a_refusal_reason_survives_a_narrow_terminal_whole() {
+    let mut t = spawn((60, 30));
+    // NOT `ready`: that predicate looks for the footer's `q quit`, and at
+    // sixty columns the footer itself is cut before it reaches those words.
+    // A readiness marker has to hold at the width being tested, which is
+    // the sort of thing only a narrow-terminal test finds out.
+    t.wait_frame(|s| s.to_string().contains("candidates ·"))
+        .expect("the first complete frame");
+    t.send(Key::Char('3')).expect("send 3");
+    let frame = t
+        .wait_frame(|s| s.to_string().contains("all refused configurations:"))
+        .expect("the rejections view");
+
+    // Rebuild the panel's prose from the grid: wrapping breaks at spaces, so
+    // joining the rows and collapsing whitespace recovers the sentence.
+    let joined = frame
+        .to_string()
+        .lines()
+        .map(|line| line.trim_matches(['│', ' ']))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let prose: String = joined.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    assert!(
+        prose.contains("safe only at one warp (<= 32 threads)"),
+        "the actionable clause must reach the reader at 60 columns:\n{frame}"
+    );
+    assert!(
+        prose.contains("divergence source `warp_id()` splits a 64-thread block"),
+        "and so must the rest of the reason:\n{frame}"
+    );
+
+    // And nothing is cut at the border. The same rule the golden scan
+    // applies, asserted here against a live grid at a width no golden covers.
+    for row in 0..frame.rows() {
+        let text = frame.row_text(row);
+        let Some(inner) = text.strip_suffix('│').and_then(|t| t.strip_prefix('│')) else {
+            continue;
+        };
+        if inner.chars().all(|c| c == '─' || c == ' ') {
+            continue;
+        }
+        if let Some(last) = inner.chars().next_back() {
+            assert!(
+                last == '…' || !(last.is_ascii_digit() || matches!(last, ',' | '[' | '(' | '=')),
+                "row {row} is cut at the border (ends {last:?}):\n{frame}"
+            );
+        }
+    }
+
+    quit(t, "narrow rejections");
+}

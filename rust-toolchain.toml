@@ -6,7 +6,7 @@
 # Current lockstep set:
 #   nightly     nightly-2026-04-03
 #   cuda-oxide  50d07314eb8b7d5ec821ba02b0048a753c20dd4e
-#   reconverge  v0.1.11 (43780b58)
+#   reconverge  v0.5.0
 [toolchain]
 channel = "nightly-2026-04-03"
 components = ["rustfmt", "clippy"]
