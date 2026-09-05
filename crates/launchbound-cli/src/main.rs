@@ -1010,6 +1010,7 @@ fn cmd_prune(
     };
 
     let mut tool_error = false;
+    let mut admitted_something = false;
     let mut json_out = Vec::new();
     for dir in &dirs {
         let spec = KernelSpec::load(dir)?;
@@ -1064,20 +1065,8 @@ fn cmd_prune(
             println!(
                 "  => {clean} clean, {caveats} with caveats, {refused} refused, {errors} tool errors"
             );
-            // What "clean" means, on the line that says it. The gate answers
-            // the convergence question and the shared-memory one; it has no
-            // view of instruction availability, so a kernel using an
-            // `sm_80+` intrinsic under `needs_cc = "7.5"` is admitted at
-            // `--cc 7.5` and only fails when something finally lowers to PTX
-            // for that part. `needs_cc` is the author's claim and is taken
-            // on trust — which is defensible, and was nowhere stated.
             if clean > 0 || caveats > 0 {
-                println!(
-                    "     (checked: thread convergence and static shared memory at cc {cc}. \
-                     NOT checked: whether the device code can lower for that part — \
-                     instruction availability is `needs_cc` in kernel.toml, the author's \
-                     claim, taken on trust.)"
-                );
+                admitted_something = true;
             }
         }
         if verdicts
@@ -1089,6 +1078,21 @@ fn cmd_prune(
     }
     if json {
         println!("{}", serde_json::to_string_pretty(&json_out)?);
+    } else if admitted_something {
+        // What "clean" means, said once for the run rather than once per
+        // kernel. The gate answers the convergence question and the
+        // shared-memory one; it has no view of instruction availability, so
+        // a kernel using an `sm_80+` intrinsic under `needs_cc = "7.5"` is
+        // admitted at `--cc 7.5` and fails only when something finally
+        // lowers it for that part. `needs_cc` is the author's claim and is
+        // taken on trust — defensible, and nowhere stated, so "clean" read
+        // as "this kernel is fine at cc 7.5".
+        println!(
+            "\nchecked at cc {cc}: thread convergence, and static shared memory against \
+             the cap.\nNOT checked: whether the device code can be lowered for that part \
+             — instruction\navailability is `needs_cc` in kernel.toml, the author's claim, \
+             taken on trust\n(docs/LIMITATIONS.md)."
+        );
     }
     Ok(if tool_error {
         ExitCode::from(2)

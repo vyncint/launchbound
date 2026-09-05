@@ -40,7 +40,7 @@ inputs:
     default: tool-error
   version:
     description: >-
-      Which launchbound release runs the gate, e.g. "2.0.0". The default,
+      Which launchbound release runs the gate, e.g. "2.1.0". The default,
       `latest`, installs the newest release on crates.io each run. Pin a
       number if you want the gate to change only when you say so.
     required: false
