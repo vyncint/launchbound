@@ -9,6 +9,35 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Changed
+
+- **The PTY test harness moves to termlens 0.10.1** (from 0.9). The upgrade
+  itself is small — `drag` takes four column-first arguments now instead of
+  two coordinate pairs — but it brings the accessor this suite was missing.
+
+- **`tests/emulation.rs` pins what the emulator drops.** Every screen
+  assertion in this crate reads a grid a VT emulator produced from the
+  binary's bytes: five golden files, two border scans and a styled banner. A
+  sequence that emulator does not implement makes the grid quietly wrong and
+  every one of those assertions a claim about a plausible-looking fiction.
+  0.10 made it checkable, and the answer is one `SGR 59` — underline colour,
+  which changes no cell. Pinned exactly, so anything joining it has to be
+  read before the suite is trusted again.
+
+- **`tests/cli.rs` drives `termlens-cli`** against this crate's own saved
+  screens: rendered, diffed with its 0/1/2 exit codes, and `inspect` pointed
+  at the real binary. The tool is resolved at the version the lockfile names,
+  so it and the library are one release.
+
+- **The vendored agent skill (`.claude/skills/termlens/SKILL.md`) is
+  refreshed to 0.10.1**, and `check-skill-version.sh` now fails when that copy
+  and the dependency disagree on major.minor. It had drifted two releases
+  behind with nothing to notice.
+
+- **CI writes `TERMLENS_ARTIFACT_DIR` and renders failures into the job
+  summary** via termlens's `report` action, so a red PTY test arrives as a
+  picture rather than a grid in a log.
+
 ## [2.1.0] - 2026-09-05
 
 Thirteen findings, all reported against 2.0.0 with a measured reproduction.

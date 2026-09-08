@@ -19,7 +19,8 @@
 #
 # `stress_100_runs_at_80x24` is skipped in the hunt. It is the same idea done
 # in-process, and running it inside an outer loop would multiply a hundred
-# spawns by twenty for no new information.
+# spawns by twenty for no new information. `tests/cli.rs` is skipped by both
+# jobs without asking: it is `#[ignore]`d, and the gate runs it by name.
 name: stress
 
 on:
@@ -56,7 +57,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install pinned toolchain
         run: rustup show
-      - run: cargo test -p launchbound-tui --test tui
+      # The PTY suites: the goldens, and the emulator invariants every one of
+      # them rests on. TERMLENS_ARTIFACT_DIR is where a failing wait leaves
+      # the screen it was looking at, for the report step at the end.
+      - run: cargo test -p launchbound-tui --test tui --test emulation
+        env:
+          TERMLENS_ARTIFACT_DIR: ${{ runner.temp }}/termlens
+      # The termlens-cli suite is `#[ignore]`d so a plain `cargo test` never
+      # `cargo install`s a binary behind a contributor's back — launchbound-tui
+      # is published, so `cargo test` is something other people run. CI is
+      # where it should run, so CI asks for it by name. The install is the
+      # version the lockfile names, so the tool and the library are one
+      # release.
+      - run: cargo test -p launchbound-tui --test cli -- --ignored
+        env:
+          TERMLENS_ARTIFACT_DIR: ${{ runner.temp }}/termlens
+      - uses: vyncint/termlens/.github/actions/report@e1b96c8203fd727fa3458af395719c429966ee82 # v0.10.1
+        if: failure()
+        with:
+          name: termlens-report-stress-${{ matrix.os }}
+          cli-version: "0.10.1" # checked against the manifest by check-skill-version.sh
 
   hunt:
     name: hunt (${{ matrix.os }}, ${{ matrix.threads }} threads)
@@ -97,6 +117,13 @@ jobs:
           ITERS: ${{ inputs.iterations || '100' }}
           THREADS: ${{ matrix.threads }}
           WEIGHT: ${{ matrix.weight }}
+          # The whole point of the hunt is the once-in-fifty failure, and
+          # until now a flaked iteration left only whatever fitted in the
+          # log. Every screen an embedded wait error carries is written here
+          # instead, and the report step uploads them — one directory across
+          # all the iterations of a shard, so a flake at iteration 37 is
+          # still there at the end.
+          TERMLENS_ARTIFACT_DIR: ${{ runner.temp }}/termlens
         run: |
           per=$(( WEIGHT * ITERS / 100 ))
           # A small `iterations` must still exercise every concurrency, or a
@@ -105,8 +132,13 @@ jobs:
           echo "${THREADS} thread(s): ${per} iterations of ${ITERS}"
           for i in $(seq "$per"); do
             echo "::group::${THREADS} threads, iteration ${i}/${per}"
-            cargo test -p launchbound-tui --release --test tui \
+            cargo test -p launchbound-tui --release --test tui --test emulation \
               -- --test-threads="$THREADS" --skip stress_100_runs \
               || { echo "::error::suite flaked at ${THREADS} thread(s), iteration ${i}/${per}"; exit 1; }
             echo "::endgroup::"
           done
+      - uses: vyncint/termlens/.github/actions/report@e1b96c8203fd727fa3458af395719c429966ee82 # v0.10.1
+        if: failure()
+        with:
+          name: termlens-report-hunt-${{ matrix.os }}-${{ matrix.threads }}
+          cli-version: "0.10.1" # checked against the manifest by check-skill-version.sh
