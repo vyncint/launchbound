@@ -45,7 +45,16 @@ MSRV 1.88 for everything that does not need it.
   satisfy both waits of a resize; `(cols, rows)` for a size and
   `(row, col)` for a cell. A readiness predicate has to hold at the width
   under test — `ready` looks for the footer's `q quit`, which is cut at
-  sixty columns.
+  sixty columns. The copy is normative, so it must name the version we
+  actually depend on: `just skill` checks that, and `just ci` runs it.
+  Refresh it with `cp ../termlens/skills/termlens/SKILL.md
+  .claude/skills/termlens/SKILL.md`.
+- **The goldens rest on `tests/emulation.rs`.** Every frame assertion in
+  launchbound-tui reads a grid a VT emulator produced, and a sequence the
+  emulator drops makes that grid quietly wrong — a golden blessed from it
+  would record the fiction. `Screen::unsupported()` is pinned to exactly
+  `["^[[59m"]`. If that test fails, distrust the goldens until you know why
+  before touching anything else.
 - **The pins move together or not at all**, and `just pins` checks that the
   recorded sites agree before anything asks upstream. 2.0.0 moved four of
   six, which left `pins.yml` measuring drift from a version nothing

@@ -26,6 +26,23 @@ jobs:
         with:
           tool: just,cargo-deny
       - run: just ci
+        env:
+          # Every screen a failing termlens wait embeds is also written here,
+          # so the report step below can put the picture in the job summary
+          # instead of leaving it in a log someone has to scroll (termlens
+          # 0.10). The dependency carries the `serde` feature, so these are
+          # `.screen.json` rather than `.screen.txt`.
+          TERMLENS_ARTIFACT_DIR: ${{ runner.temp }}/termlens
+      # A PTY failure is a picture, and a log is the worst place to read one.
+      # This renders every screen the suite left behind into the job summary
+      # and uploads the SVG/HTML. It installs termlens-cli itself, pinned to
+      # the version the lockfile names so the renderer and the library that
+      # wrote the file are one release — the same rule tests/cli.rs enforces.
+      - uses: vyncint/termlens/.github/actions/report@e1b96c8203fd727fa3458af395719c429966ee82 # v0.10.1
+        if: failure()
+        with:
+          name: termlens-report-ci-${{ matrix.os }}
+          cli-version: "0.10.1" # checked against the manifest by check-skill-version.sh
 
   # MSRV applies to the crates that do not need the pinned nightly
   # (CONTRIBUTING.md); checked against the committed lockfile.

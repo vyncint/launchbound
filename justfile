@@ -2,8 +2,11 @@
 
 default: ci
 
-# The full local gate. Never push a commit that fails this.
-ci: fmt-check clippy test deny schemas pins
+# The full local gate. Never push a commit that fails this. There is no
+# "all required jobs green" aggregator job in ci.yml — this recipe is the
+# aggregator, and the `ci` job runs it verbatim on both OSes — so a new gate
+# becomes required by being listed here.
+ci: fmt-check clippy test deny schemas pins skill
 
 # Cargo errors on a memberless virtual workspace, so the cargo recipes no-op
 # until the first crate lands in S1. `grep -c` prints 1 when packages is empty.
@@ -48,3 +51,15 @@ pins:
 # Golden + JSON Schema validation of report documents (S4).
 schemas:
     cargo test -p launchbound-report --test schema_and_golden
+
+# The vendored termlens skill names the version we actually depend on.
+# AGENTS.md makes that copy normative for PTY tests, so a stale one is a
+# wrong contract, not a stale doc — and the staleness is silent.
+skill:
+    ./.github/scripts/check-skill-version.sh
+
+# The termlens-cli suite. `#[ignore]`d so a plain `cargo test` never
+# `cargo install`s a binary behind a contributor's back (launchbound-tui is
+# published); CI asks for it by name.
+termlens-cli:
+    cargo test -p launchbound-tui --test cli -- --ignored

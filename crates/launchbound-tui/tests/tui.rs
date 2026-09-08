@@ -3,6 +3,10 @@
 //! search progress view, and the rejection view — plus the 100-iteration
 //! stress. No frame contains a clock or an animation.
 //!
+//! Two sibling files carry the rest: `emulation.rs` asserts that the grid
+//! every golden here rests on is one the emulator saw whole, and `cli.rs`
+//! drives `termlens-cli` over these goldens and the real binary.
+//!
 //! Sync policy: `wait_frame`, and the frame it returns is the one asserted
 //! on — never `wait_idle`, never sleep.
 //!
@@ -29,8 +33,19 @@ use termlens::{Key, Terminal};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
+/// A run directory shipped *inside* this crate. It has to be inside it:
+/// `cargo package -p launchbound-tui --list` ships `src/`, `tests/` and
+/// nothing above them, so a test reading `../../runs/...` would be published
+/// with its data missing and fail for every downstream consumer — and
+/// release.yml publishes with `--no-verify`, so nothing in CI would say so.
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name)
+}
+
 fn fixture_run() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/run-flip")
+    fixture("run-flip")
 }
 
 fn golden_path(name: &str) -> PathBuf {
@@ -63,12 +78,40 @@ fn assert_golden(name: &str, screen: &str, context: &str) {
     );
 }
 
-fn spawn(size: (u16, u16)) -> Terminal {
+/// A *styled* golden, compared verbatim.
+///
+/// `with_styles()` writes three things a plain golden does not have: the
+/// `size:`/`cursor:` header, the grid, and a `styles:` block naming the run
+/// of columns each attribute covers. It goes through neither `normalize`
+/// nor `to_string()`: this file is read back by `Screen::parse` in the same
+/// test, and the round trip is only byte-exact against what `with_styles`
+/// actually wrote.
+///
+/// Blessed by the same `LAUNCHBOUND_BLESS=1` that blesses the plain
+/// goldens, so the documented regeneration command covers this one too.
+fn assert_styled_golden(name: &str, screen: &termlens::Screen, context: &str) -> String {
+    let path = golden_path(name);
+    let actual = screen.with_styles().to_string();
+    if env::var_os("LAUNCHBOUND_BLESS").is_some() {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, format!("{actual}\n")).unwrap();
+    }
+    let expected = fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing golden {name}; bless with LAUNCHBOUND_BLESS=1"));
+    assert_eq!(
+        expected.trim_end_matches('\n'),
+        actual,
+        "{context}: styled frame differs from golden {name}"
+    );
+    expected
+}
+
+fn spawn_in(run_dir: PathBuf, size: (u16, u16)) -> Terminal {
     let mut t = Terminal::builder()
         .size(size.0, size.1)
         .env_clear()
         .timeout(TIMEOUT)
-        .arg(fixture_run())
+        .arg(run_dir)
         .spawn(env!("CARGO_BIN_EXE_launchbound-tui"))
         .expect("failed to spawn the TUI in a PTY");
     // A quiet PTY is not a painted PTY: under parallel-test load the first
@@ -78,10 +121,28 @@ fn spawn(size: (u16, u16)) -> Terminal {
     t
 }
 
+fn spawn(size: (u16, u16)) -> Terminal {
+    spawn_in(fixture_run(), size)
+}
+
 fn quit(mut t: Terminal, context: &str) {
     t.send(Key::Char('q')).expect("send q");
     let status = t.wait_exit().expect("TUI did not exit after q");
     assert!(status.success(), "{context}: exited with {status:?}");
+    // main.rs leaves the alternate screen *after* the event loop returns,
+    // on every path. Nothing asserted it, so a `?` that skipped the
+    // teardown, or a panic escaping the loop, would leave the user's shell
+    // painted with a dead frame and every test here still green — this is
+    // a published binary that takes the terminal over. It is the vendored
+    // skill's own rule, and it belongs in `quit` so every test that spawns
+    // makes it rather than one.
+    //
+    // Not a second instant to race against: the child has exited, so no
+    // further byte can arrive and this screen is final.
+    assert!(
+        !t.screen().alternate_screen(),
+        "{context}: the TUI exited without leaving the alternate screen"
+    );
 }
 
 /// The overview has painted once its footer is on screen: it is drawn last,
@@ -113,16 +174,29 @@ fn resize_relayouts_the_frame() {
     // one the resize produced, leaving nothing for the second wait and a
     // ten-second timeout. termlens says so in as many words ("has not
     // completed a repaint since the frame this terminal last returned").
-    t.wait_frame(|s| {
-        let frame = s.to_string();
-        frame.contains("q quit") && !frame.contains("[0.0398, 0.0402]")
-    })
-    .expect("the 80-column frame");
+    let before = t
+        .wait_frame(|s| {
+            let frame = s.to_string();
+            frame.contains("q quit") && !frame.contains("[0.0398, 0.0402]")
+        })
+        .expect("the 80-column frame");
     t.resize(110, 32).expect("resize");
     let frame = t
         .wait_frame(|s| s.to_string().contains("[0.0398, 0.0402]"))
         .expect("the relaid-out frame");
     assert_golden("overview-110x32.txt", &frame.to_string(), "resized");
+    // The subject of this test, said directly rather than inferred from two
+    // files agreeing with two other files: the frame *changed*. Counting
+    // changed cells rather than `!is_empty()` on purpose — a `ScreenDiff`
+    // between two different sizes is non-empty from the sizes alone, which
+    // would be true of an application that ignored SIGWINCH entirely. These
+    // are cells inside the eighty-column overlap, so they can only come from
+    // a re-layout. Its `Display` prints them when it fails.
+    let diff = before.diff(&frame);
+    assert!(
+        diff.cells().count() > 0,
+        "the 110-column frame re-laid out nothing inside the old width:\n{diff}"
+    );
     quit(t, "resized");
 }
 
@@ -283,8 +357,29 @@ fn a_refusal_reason_survives_a_narrow_terminal_whole() {
     // sixty columns the footer itself is cut before it reaches those words.
     // A readiness marker has to hold at the width being tested, which is
     // the sort of thing only a narrow-terminal test finds out.
-    t.wait_frame(|s| s.to_string().contains("candidates ·"))
+    let first = t
+        .wait_frame(|s| s.to_string().contains("candidates ·"))
         .expect("the first complete frame");
+    // And that is a measurement, not a note: the footer keeps four of its
+    // five separators here and loses the words `ready` waits for. Pinning it
+    // means the day the footer starts fitting at sixty columns, this comment
+    // stops being a fact and says so, rather than quietly misinforming the
+    // next person who writes a narrow-terminal test.
+    let footer = first.rows() - 1;
+    let separators = first
+        .find_all("·")
+        .into_iter()
+        .filter(|(row, _)| *row == footer)
+        .count();
+    assert_eq!(
+        separators, 4,
+        "the sixty-column footer is cut mid-list:\n{first}"
+    );
+    assert!(
+        first.locate("q quit").is_none(),
+        "`ready` would hold at sixty columns after all — reread the comment \
+         above and the one in AGENTS.md:\n{first}"
+    );
     t.send(Key::Char('3')).expect("send 3");
     let frame = t
         .wait_frame(|s| s.to_string().contains("all refused configurations:"))
@@ -328,4 +423,158 @@ fn a_refusal_reason_survives_a_narrow_terminal_whole() {
     }
 
     quit(t, "narrow rejections");
+}
+
+/// The Metal banner is bold *and* reverse-video, and nothing else on the
+/// frame is.
+///
+/// This is the project's central honesty claim reaching a screen. `app.rs`
+/// paints the no-gate notice `BOLD | REVERSED` and its comment says the
+/// banner "cannot be disabled (the same rule as the text renderer)" — and
+/// until now that rule was enforced only for the *text* renderer, in
+/// launchbound-report's `schema_and_golden`, as a plain substring. The TUI
+/// had no gate=none frame at all, and a plain-text golden could not tell
+/// `BOLD | REVERSED` from unstyled text if it had one: both render the same
+/// characters. termlens 0.10's `with_styles()` is what makes the styling
+/// assertable, so the claim is finally checked where the user meets it.
+///
+/// The fixture is `runs/reduce-stable-metal` copied verbatim into the crate
+/// (see `fixture`).
+#[test]
+fn the_metal_banner_is_bold_and_reversed_and_nothing_else_is() {
+    const BANNER: &str =
+        "NO convergence gate exists on the Metal path: the same bug class is NOT checked";
+
+    let mut t = spawn_in(fixture("run-metal"), (80, 24));
+    let frame = t.wait_frame(ready).expect("the first complete frame");
+
+    let at = frame.find(BANNER).unwrap_or_else(|| {
+        panic!("the no-gate banner is not on the gate=none frame at all:\n{frame}")
+    });
+    assert_eq!(at, (1, 0), "the banner is the second line of the header");
+
+    // Every cell of it, not the row: a banner that lost its styling halfway
+    // is the failure worth catching, and the row is wider than the text.
+    for col in 0..BANNER.chars().count() as u16 {
+        let cell = frame
+            .cell(1, col)
+            .unwrap_or_else(|| panic!("cell (1, {col}) is off the grid"));
+        let style = cell.style();
+        assert!(
+            style.bold && style.reverse,
+            "banner cell (1, {col}) {:?} is not bold+reverse — the notice can \
+             be read past:\n{frame}",
+            cell.contents()
+        );
+    }
+
+    // And it is the only reversed thing on the frame, so "reversed" still
+    // means "this one banner" to a reader who has seen the screen once.
+    for row in 0..frame.rows() {
+        if row == 1 {
+            continue;
+        }
+        for col in 0..frame.cols() {
+            let Some(cell) = frame.cell(row, col) else {
+                continue;
+            };
+            assert!(
+                !cell.style().reverse,
+                "row {row} col {col} is also reversed, which dilutes the \
+                 banner:\n{frame}"
+            );
+        }
+    }
+
+    // The recording. A styled golden pins the rest of the frame's styling
+    // too — the bold `launchbound` and the bold section headings.
+    //
+    // Deliberately no `Screen::parse` round trip here. `assert_styled_golden`
+    // has just asserted the file equals this screen's `with_styles()` output,
+    // so parsing it back and diffing could only fail if termlens' own round
+    // trip were broken — a claim about the harness, not about launchbound,
+    // and one `emulation.rs::a_frame_survives_the_snapshot_format_and_json`
+    // makes properly against a live screen.
+    assert_styled_golden("overview-metal-80x24.styled.txt", &frame, "metal overview");
+
+    quit(t, "metal overview");
+}
+
+/// `wait_frame` works here *because* the binary brackets every repaint in
+/// DEC 2026 synchronized updates. The module header at the top of this file
+/// argues that at length; nothing asserted it.
+///
+/// It is worth one test because of how it fails: drop the
+/// `BeginSynchronizedUpdate` at main.rs:74 and the emulator never sees a
+/// frame boundary, so every `wait_frame` in this file times out after ten
+/// seconds and reports what the application was showing — which looks like
+/// eight broken assertions about the UI rather than one missing mode.
+/// `repaints()` names the cause in one line.
+#[test]
+fn every_repaint_is_bracketed_so_wait_frame_sees_whole_frames() {
+    let mut t = spawn((80, 24));
+    let first = t.wait_frame(ready).expect("the first complete frame");
+    assert_eq!(
+        first.repaints(),
+        1,
+        "the first draw is one bracketed repaint, not zero (unbracketed) and \
+         not several (bracketed per widget):\n{first}"
+    );
+
+    let mut expected = 1;
+    for (key, needle) in [
+        ('2', "ranking ("),
+        ('3', "all refused configurations:"),
+        ('4', "measured 11 of"),
+    ] {
+        t.send(Key::Char(key)).expect("send a view key");
+        let frame = t
+            .wait_frame(|s| s.to_string().contains(needle))
+            .expect("the view's frame");
+        expected += 1;
+        assert_eq!(
+            frame.repaints(),
+            expected,
+            "one keystroke is one whole frame ({needle}):\n{frame}"
+        );
+    }
+    quit(t, "repaints");
+}
+
+/// The footer reaches the reader whole at eighty columns — every separator
+/// and the last word of the last hint.
+///
+/// The interesting half is that this is the same measurement the sixty-column
+/// test makes and gets a different answer to. `ready` rests on `q quit`
+/// being on the grid, so every test in this file rests on it; at sixty
+/// columns it is not, and that difference has already cost a ten-second
+/// timeout. Pinning both ends means a layout change that starts cutting the
+/// footer at eighty is a named failure here rather than eight timeouts.
+#[test]
+fn the_footer_reaches_the_reader_whole_at_eighty_columns() {
+    let mut t = spawn((80, 24));
+    let frame = t.wait_frame(ready).expect("the first complete frame");
+
+    let footer = frame.rows() - 1;
+    let separators: Vec<(u16, u16)> = frame
+        .find_all("·")
+        .into_iter()
+        .filter(|(row, _)| *row == footer)
+        .collect();
+    assert_eq!(
+        separators.len(),
+        5,
+        "the footer lists six hints separated by five `·`; it is cut:\n{frame}"
+    );
+
+    let Some(termlens::Location::Screen { row, col }) = frame.locate("q quit") else {
+        panic!("the last hint `q quit` is not on the grid:\n{frame}");
+    };
+    assert_eq!(row, footer, "and it is on the footer row");
+    assert!(
+        col > separators.last().unwrap().1,
+        "after the last separator:\n{frame}"
+    );
+
+    quit(t, "footer");
 }

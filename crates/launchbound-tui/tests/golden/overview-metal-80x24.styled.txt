@@ -1,0 +1,31 @@
+size: 80x24  cursor: hidden
+launchbound — reduce-stable · gate cc metal · measured · Apple M4 Pro
+NO convergence gate exists on the Metal path: the same bug class is NOT checked
+11 candidates · 11 admitted · 0 refused · 11 measured ok
+┌overview──────────────────────────────────────────────────────────────────────┐
+│CHOSEN  c1-43e865c2e1620697  block_x=128 tile=128  0.0968 ms [0.0968, 0.0969] │
+│indistinguishable: c1-a0fdcb26d0491a52                                        │
+│                                                                              │
+│GPU-seconds consumed: 0.7                                                     │
+│                                                                              │
+│the field, fastest first                                                      │
+│» block_x=128 tile=128        0.0968 ms                                       │
+│  block_x=256 tile=256        0.0969 ms   +0.0%                               │
+│  block_x=64 tile=128         0.0989 ms   +2.2%                               │
+│  block_x=128 tile=256        0.0992 ms   +2.5%                               │
+│  block_x=64 tile=256         0.1008 ms   +4.1%                               │
+│  block_x=256 tile=512        0.1040 ms   +7.4%                               │
+│  block_x=128 tile=512        0.1049 ms   +8.3%                               │
+│  block_x=32 tile=128         0.1520 ms  +57.0%                               │
+│  block_x=64 tile=512         0.1681 ms  +73.6%                               │
+│  block_x=32 tile=256         0.2859 ms  +195.2%                              │
+│  block_x=32 tile=512         0.3651 ms  +277.1%                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+1 overview · 2 ranking · 3 rejections · 4 progress · j/k scroll · q quit
+
+styles:
+0: 0-11 bold
+1: 0-78 bold reverse
+4: 1-8 bold
+9: 1-24 bold

@@ -22,4 +22,9 @@ crossterm = "0.29"
 ratatui = "0.30"
 
 [dev-dependencies]
-termlens = { version = "0.9", default-features = false }
+# `serde` for the Screen <-> JSON round trip in tests/emulation.rs, and so a
+# failing wait under `TERMLENS_ARTIFACT_DIR` leaves `.screen.json` rather than
+# `.screen.txt` — which is what the report action in CI renders. `insta` (the
+# crate's default) stays off: goldens here go through LAUNCHBOUND_BLESS.
+termlens = { version = "0.10", default-features = false, features = ["serde"] }
+serde_json = { workspace = true }
