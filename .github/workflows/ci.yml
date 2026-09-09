@@ -44,6 +44,54 @@ jobs:
           name: termlens-report-ci-${{ matrix.os }}
           cli-version: "0.10.1" # checked against the manifest by check-skill-version.sh
 
+  # The public API against the last published release.
+  #
+  # `--release-type` is FORCED, never inferred, and the reason is measured
+  # rather than assumed. Removing `Config::kernel` from launchbound-space
+  # while bumping the manifest to 3.0.0 in the same PR:
+  #
+  #   inferred        ->  "0 checks: 0 pass, 254 skip", exit 0
+  #   --release-type patch ->  "1 major and 0 minor checks failed", exit 100
+  #
+  # cargo-semver-checks compares the manifest version to the baseline and
+  # runs only the lints that bump would not already excuse. Declare the major
+  # bump in the same commit as the break and it has nothing left to say. That
+  # is the hole: the gate agrees with whatever the PR claims about itself.
+  #
+  # `patch` means "no API change of any kind is excused", so every lint
+  # fires. It does NOT forbid additions -- cargo-semver-checks only reports
+  # breaking changes, so a new `pub fn` passes (verified: 223 checks, 223
+  # pass, with a `pub use` added).
+  #
+  # A deliberate break carries the `breaking` label, which switches this to
+  # `major`. Three of the eleven published crates are binary-only and have no
+  # library API; the eight that do are all covered by --workspace.
+  #
+  # `baseline-version` is a literal, moved in the release PR after publish --
+  # left at the old release it would compare against a version nobody can
+  # install, and moved before publish it would compare against one that does
+  # not exist yet.
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain from rust-toolchain.toml
+        run: rustup show
+      # A prebuilt binary, downloaded every run: never built from source, and
+      # never restored from a cache. A gate that reports on whatever a cache
+      # held the day it was filled is not reporting on this PR.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+      - name: Compare the public API against the published baseline
+        env:
+          RELEASE_TYPE: ${{ contains(github.event.pull_request.labels.*.name, 'breaking') && 'major' || 'patch' }}
+        run: |
+          echo "release-type: $RELEASE_TYPE"
+          cargo semver-checks --workspace \
+            --baseline-version 2.1.0 \
+            --release-type "$RELEASE_TYPE"
+
   # MSRV applies to the crates that do not need the pinned nightly
   # (CONTRIBUTING.md); checked against the committed lockfile.
   msrv:

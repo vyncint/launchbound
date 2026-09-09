@@ -6,7 +6,7 @@ default: ci
 # "all required jobs green" aggregator job in ci.yml — this recipe is the
 # aggregator, and the `ci` job runs it verbatim on both OSes — so a new gate
 # becomes required by being listed here.
-ci: fmt-check clippy test deny schemas pins skill
+ci: fmt-check clippy test deny schemas pins versions skill
 
 # Cargo errors on a memberless virtual workspace, so the cargo recipes no-op
 # until the first crate lands in S1. `grep -c` prints 1 when packages is empty.
@@ -47,6 +47,13 @@ prune cc="8.6":
 # installs, which is how #17 came to describe a pin two releases old.
 pins:
     ./scripts/check-pins.sh
+
+# The workspace version, every crate's version, and the internal `version =`
+# pins in [workspace.dependencies] agree. The pins sat at 2.0.0 through the
+# whole 2.1.0 line: harmless for a path build, wrong as a record, and fatal
+# to the next major bump (`cargo metadata` refuses to resolve).
+versions:
+    ./scripts/check-versions.sh
 
 # Golden + JSON Schema validation of report documents (S4).
 schemas:
