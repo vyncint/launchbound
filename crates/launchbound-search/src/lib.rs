@@ -10,18 +10,35 @@
 //! Model-guided ordering lands with S6: it is still an a-priori order, just
 //! sorted by the analytical model's estimate.
 
+#![warn(missing_docs)]
+
 use launchbound_bench::BenchPlan;
 
+/// How the sweep chooses which candidate to measure next.
+///
+/// A strategy is a pure function of the plan and its own seed: the same
+/// plan and seed give the same order on any host, which is what makes a
+/// budget-limited run reproducible and resumable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Strategy {
     /// Plan order (the space's canonical enumeration order).
     Exhaustive,
     /// Seeded uniform shuffle, without replacement: the budget-limited
     /// baseline every cleverer strategy must beat.
-    Random { seed: u64 },
+    Random {
+        /// Seed for the shuffle. Recorded in `results.v1` as
+        /// `random:<seed>`, so a run can be reproduced exactly.
+        seed: u64,
+    },
 }
 
 impl Strategy {
+    /// Parse a `--strategy` value. `None` for anything but `exhaustive`
+    /// or `random`; the caller reports the name it did not recognize.
+    ///
+    /// `seed` is consumed only by `random`, so passing one alongside
+    /// `exhaustive` is accepted and ignored rather than refused — the CLI
+    /// supplies a default seed on every invocation.
     pub fn parse(name: &str, seed: u64) -> Option<Strategy> {
         match name {
             "exhaustive" => Some(Strategy::Exhaustive),

@@ -16,6 +16,12 @@
 
 use serde::{Deserialize, Serialize};
 
+/// One `findings.v1` document, as reconverge prints it.
+///
+/// Every field is `#[serde(default)]` on purpose: this is another tool's
+/// wire format, pinned but alpha, and a document that grows a field must
+/// not stop parsing here. What matters is that a *missing* field never
+/// reads as a clean verdict.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FindingsDoc {
     /// Schema tag; expected `findings.v1`.
@@ -25,6 +31,12 @@ pub struct FindingsDoc {
     /// 0.5.0 and later; absent from an older analyzer's output.
     #[serde(default)]
     pub target: Option<String>,
+    /// Every finding in the document. Empty means the analyzer ran and
+    /// found nothing — which is a clean result only if it also *ran*. An
+    /// analyzer that printed no document at all is a read error, and
+    /// [`decide`](crate::decide) turns that into
+    /// [`Verdict::ToolError`](crate::Verdict::ToolError) rather than a
+    /// pass.
     #[serde(default)]
     pub findings: Vec<Finding>,
 }
@@ -34,11 +46,18 @@ pub struct FindingsDoc {
 pub enum ReadError {
     /// A line was not a findings document at all.
     Parse {
+        /// 1-based line number in the analyzer's output.
         line: usize,
+        /// The deserialization failure.
         error: serde_json::Error,
     },
     /// A line parsed but declared a schema this build does not implement.
-    Schema { line: usize, declared: String },
+    Schema {
+        /// 1-based line number in the analyzer's output.
+        line: usize,
+        /// The schema tag that was found instead of `findings.v1`.
+        declared: String,
+    },
     /// The analyzer printed nothing where a document was expected.
     Empty,
 }
@@ -57,32 +76,47 @@ impl std::fmt::Display for ReadError {
     }
 }
 
+/// One rule firing at one place in the kernel.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Finding {
     /// Rule ID, e.g. `RC001`.
     pub code: String,
     /// `warning`, `deny`, or `confirmed`.
     pub confidence: String,
+    /// The `#[kernel]` entry this finding is about.
     #[serde(default)]
     pub kernel: String,
+    /// One-line summary, e.g. `barrier under divergence`.
     #[serde(default)]
     pub message: String,
+    /// Where in the source, when the analyzer could attribute it.
     #[serde(default)]
     pub span: Option<Span>,
+    /// The chain of reasoning that reached this finding — the divergence
+    /// source, the call path, the barrier. This is what the rejection view
+    /// shows a reader who wants to know *why*.
     #[serde(default)]
     pub provenance: Vec<ProvenanceEntry>,
+    /// Additional context the analyzer attached.
     #[serde(default)]
     pub notes: Vec<String>,
+    /// A suggested fix, when the rule has one.
     #[serde(default)]
     pub help: Option<String>,
 }
 
+/// A source range, rendered as `file:line:column`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Span {
+    /// Path as the analyzer reported it, relative to the kernel crate.
     pub file: String,
+    /// 1-based start line.
     pub line_start: u32,
+    /// 1-based start column.
     pub column_start: u32,
+    /// 1-based end line.
     pub line_end: u32,
+    /// 1-based end column.
     pub column_end: u32,
 }
 
@@ -92,15 +126,26 @@ impl std::fmt::Display for Span {
     }
 }
 
+/// One step in a finding's chain of reasoning.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProvenanceEntry {
+    /// What this step is, e.g. `divergence source` or `barrier`.
     #[serde(default)]
     pub what: String,
+    /// Where it is, when the analyzer could say.
     #[serde(default)]
     pub span: Option<Span>,
 }
 
 impl FindingsDoc {
+    /// Parse a single document.
+    ///
+    /// reconverge prints JSONL — one document per compiled target — so
+    /// this is the per-line step, not the way to read a whole run. The
+    /// crate reads a run with its own `read_stream`, which takes the union
+    /// across documents; that function and its `ReadError` are internal
+    /// today, so a consumer parsing analyzer output directly gets this and
+    /// splits the lines itself.
     pub fn parse(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }

@@ -6,17 +6,31 @@
 
 use serde::{Deserialize, Serialize};
 
+/// A candidate's timings, reduced to what a decision needs.
+///
+/// The interval is the point. Two configurations whose 95% CIs overlap are
+/// reported indistinguishable and never ranked against each other
+/// (`docs/BENCHMARKING.md`), because a tool that puts a winner's name on
+/// measurement noise is worse than one that says it cannot tell.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Summary {
     /// Samples kept after outlier rejection.
     pub n: usize,
+    /// Samples dropped by the Tukey fences, NaNs among them.
     pub outliers_rejected: usize,
+    /// Median of the kept samples — the statistic everything ranks on,
+    /// chosen over the mean because a single descheduled launch should not
+    /// move it.
     pub median_ms: f64,
     /// Distribution-free 95% CI on the median (order statistics).
     pub ci95_lo_ms: f64,
+    /// Upper bound of that interval.
     pub ci95_hi_ms: f64,
+    /// Fastest kept sample.
     pub min_ms: f64,
+    /// Slowest kept sample.
     pub max_ms: f64,
+    /// Mean of the kept samples. Reported for context; nothing ranks on it.
     pub mean_ms: f64,
 }
 

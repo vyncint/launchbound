@@ -11,33 +11,58 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+/// What measuring one candidate produced — including the ways it can fail.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CandidateResult {
+    /// Its canonical `config.v1` ID, joining this to the plan and verdicts.
     pub id: String,
+    /// Its dimension assignments.
     pub config: String,
-    pub status: String, // "ok" | "error"
+    /// `ok`, `error`, or `timeout` — the last meaning a watchdog fired on
+    /// a candidate the gate had refused, which is the refusal being right.
+    pub status: String,
+    /// Why it failed, when it did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Untimed launches performed before measuring.
     pub warmup: u32,
+    /// Timed launches requested.
     pub repeats: u32,
+    /// Every raw sample, in launch order. Kept so a summary can be
+    /// recomputed without re-running the GPU.
     #[serde(default)]
     pub times_ms: Vec<f64>,
+    /// The reduction of `times_ms`. `None` when nothing was measured.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<Summary>,
     /// Wall-clock seconds this candidate consumed on the GPU host.
     pub gpu_seconds: f64,
 }
 
+/// A `results.v1` document: every measurement, and the machine that took it.
+///
+/// Checkpointed after each candidate, so an interrupted sweep resumes from
+/// what it already measured rather than starting over.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Results {
+    /// Schema tag; always `results.v1`.
     pub schema: String,
+    /// The kernel measured.
     pub kernel: String,
+    /// The entry point launched.
     pub entry: String,
+    /// The capability the plan was gated at.
     pub plan_cc: String,
+    /// Product name of the device, as the driver reports it.
     pub device_name: String,
+    /// The device's actual capability, which need not equal `plan_cc`.
     pub device_cc: String,
+    /// Driver version. Part of what makes a timing reproducible, and part
+    /// of why results do not port (`docs/LIMITATIONS.md`).
     pub driver_version: String,
+    /// One entry per candidate visited, in visiting order.
     pub candidates: Vec<CandidateResult>,
+    /// GPU seconds the whole sweep consumed.
     pub total_gpu_seconds: f64,
     /// Strategy that produced the visiting order (`exhaustive` | `random:<seed>`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -47,6 +72,7 @@ pub struct Results {
     pub budget_exhausted: bool,
 }
 
+/// How to visit a plan's candidates, and when to stop.
 pub struct RunOptions {
     /// Visiting order over plan.candidates indices (a permutation or
     /// prefix); defaults to plan order.
@@ -58,6 +84,7 @@ pub struct RunOptions {
 }
 
 impl RunOptions {
+    /// Visit every candidate in plan order, with no budget.
     pub fn exhaustive(plan: &BenchPlan) -> Self {
         RunOptions {
             order: (0..plan.candidates.len()).collect(),

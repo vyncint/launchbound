@@ -6,6 +6,8 @@
 //! canonical, stable, hashable ID. Enumeration is a pure function of the
 //! spec: same spec, same order, byte for byte.
 
+#![warn(missing_docs)]
+
 mod constraint;
 mod spec;
 
@@ -16,22 +18,41 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt;
 
+/// What can go wrong loading a spec or enumerating its space.
 #[derive(Debug, thiserror::Error)]
 pub enum SpaceError {
+    /// `kernel.toml` could not be read.
     #[error("failed to read {path}: {source}")]
     Io {
+        /// The file that could not be read.
         path: String,
+        /// The underlying I/O failure.
         source: std::io::Error,
     },
+    /// `kernel.toml` is not valid TOML.
     #[error("failed to parse {path}: {source}")]
     Parse {
+        /// The file that would not parse.
         path: String,
+        /// The TOML error, boxed because it is large and this variant is
+        /// rare.
         source: Box<toml::de::Error>,
     },
+    /// The TOML parsed but does not describe a usable space: a bad
+    /// dimension name, an empty or duplicated value list, a block axis
+    /// above the CUDA limit, or no dimensions at all.
     #[error("invalid kernel spec: {0}")]
     Invalid(String),
+    /// A `[constraints]` expression could not be parsed or evaluated —
+    /// including arithmetic that would overflow or divide by zero, which
+    /// is an error rather than a verdict.
     #[error("invalid constraint `{expr}`: {reason}")]
-    Constraint { expr: String, reason: String },
+    Constraint {
+        /// The expression as written in `kernel.toml`.
+        expr: String,
+        /// What was wrong with it.
+        reason: String,
+    },
 }
 
 /// One point in a kernel's configuration space: a total assignment of every
@@ -44,14 +65,22 @@ pub struct Config {
 }
 
 impl Config {
+    /// The kernel this configuration belongs to.
     pub fn kernel(&self) -> &str {
         &self.kernel
     }
 
+    /// The value assigned to one dimension, or `None` if the spec does not
+    /// declare it.
     pub fn get(&self, dim: &str) -> Option<&Value> {
         self.values.get(dim)
     }
 
+    /// Every `(dimension, value)` pair, ascending by dimension name.
+    ///
+    /// The order is the sorted order, not the declaration order, and it is
+    /// what makes [`Config::id`] canonical: two configurations that assign
+    /// the same values hash identically however their spec was written.
     pub fn values(&self) -> impl Iterator<Item = (&str, &Value)> {
         self.values.iter().map(|(k, v)| (k.as_str(), v))
     }
@@ -139,6 +168,8 @@ impl fmt::Display for Config {
 pub struct ConfigId(String);
 
 impl ConfigId {
+    /// The ID as it appears in `verdicts.v1`, `plan.v1`, `results.v1` and
+    /// `report.v1` — `c1-` followed by 16 hex digits.
     pub fn as_str(&self) -> &str {
         &self.0
     }

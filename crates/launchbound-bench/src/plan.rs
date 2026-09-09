@@ -12,12 +12,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+/// What can go wrong turning a spec into a benchmark plan.
 #[derive(Debug, thiserror::Error)]
 pub enum PlanError {
+    /// The `[bench]` section is missing, malformed, or names a dimension
+    /// or buffer the spec does not declare.
     #[error("kernel.toml [bench]: {0}")]
     Spec(String),
+    /// The spec or one of its constraints did not load.
     #[error(transparent)]
     Space(#[from] launchbound_space::SpaceError),
+    /// The plan could not be read, written or deserialized.
     #[error("plan io: {0}")]
     Io(String),
 }
@@ -28,24 +33,58 @@ pub enum PlanError {
 pub enum ArgSpec {
     /// Device buffer of f32, copied in (seeded deterministic init).
     /// One `.param` slot (the pointer).
-    InF32 { len: u64 },
+    InF32 {
+        /// Elements, not bytes.
+        len: u64,
+    },
     /// Device buffer of u32, values `seed % modulo` (histogram bins etc.).
-    InU32 { len: u64, modulo: u64 },
+    InU32 {
+        /// Elements, not bytes.
+        len: u64,
+        /// Values are `seed % modulo`, so a histogram's inputs land in
+        /// range without the plan carrying the data.
+        modulo: u64,
+    },
     /// Device buffer of f32, zero-filled output. One slot.
-    OutF32 { len: u64 },
+    OutF32 {
+        /// Elements, not bytes.
+        len: u64,
+    },
     /// Device buffer of u32, zero-filled output. One slot.
-    OutU32 { len: u64 },
+    OutU32 {
+        /// Elements, not bytes.
+        len: u64,
+    },
     /// The length of the buffer at `of` (0-based ArgSpec index), as u64.
-    LenOf { of: usize },
+    LenOf {
+        /// 0-based index into the candidate's `args` of the buffer whose
+        /// length this passes.
+        of: usize,
+    },
     /// Scalar u32.
-    U32 { value: u64 },
+    U32 {
+        /// The value, held as `u64` and narrowed at launch.
+        value: u64,
+    },
     /// Scalar u64.
-    U64 { value: u64 },
+    U64 {
+        /// The value.
+        value: u64,
+    },
 }
 
+/// One configuration, ready to launch: everything the runner needs and
+/// nothing it has to recompute.
+///
+/// A plan is deliberately self-contained. The runner takes a plan and a
+/// directory of PTX and needs neither the kernel source, nor cuda-oxide,
+/// nor reconverge — which is what lets the measurement leg run on a GPU box
+/// that has none of them installed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Candidate {
+    /// Its canonical `config.v1` ID, matching `verdicts.v1`.
     pub id: String,
+    /// Its dimension assignments, e.g. `block_x=128 tile=256`.
     pub config: String,
     /// PTX file path, relative to the plan file.
     pub ptx: String,
@@ -54,24 +93,38 @@ pub struct Candidate {
     /// may genuinely hang.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub unsafe_candidate: bool,
+    /// Grid dimensions `[x, y, z]`, resolved from the `[bench]`
+    /// expressions for this configuration.
     pub grid: [u32; 3],
+    /// Block dimensions `[x, y, z]` — the launch shape the gate judged.
     pub block: [u32; 3],
+    /// Kernel arguments in PTX parameter order.
     pub args: Vec<ArgSpec>,
+    /// Untimed launches before measurement, to settle clocks and caches.
     pub warmup: u32,
+    /// Timed launches. Each contributes one sample to the summary.
     pub repeats: u32,
 }
 
+/// A `plan.v1` document: every candidate to measure, and how.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchPlan {
+    /// Schema tag; always `plan.v1`.
     pub schema: String,
+    /// The kernel being tuned.
     pub kernel: String,
+    /// The `#[kernel]` entry point to launch, as named in the PTX.
     pub entry: String,
+    /// The capability the gate ran at, carried so the runner can refuse a
+    /// plan built for a different target than the device it holds.
     pub cc: String,
     /// Present iff the plan includes gate-refused candidates: the explicit,
     /// recorded reason the operator gave to --allow-unsafe (see the README). Never a
     /// default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allow_unsafe_reason: Option<String>,
+    /// The candidates to measure, in plan order. A strategy visits them
+    /// in its own order without reordering this list.
     pub candidates: Vec<Candidate>,
 }
 
@@ -115,6 +168,11 @@ struct RawArg {
     modulo: Option<toml::Value>,
 }
 
+/// The `[bench]` section, parsed once and used to build every candidate.
+///
+/// It holds the grid expressions and argument declarations, which are the
+/// same for the whole space; only the values they resolve against change
+/// per configuration.
 #[derive(Debug)]
 pub struct BenchSpec {
     raw: RawBench,
@@ -231,12 +289,18 @@ impl BenchSpec {
 }
 
 impl BenchPlan {
+    /// Write the plan as pretty JSON.
     pub fn write(&self, path: &Path) -> Result<(), PlanError> {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| PlanError::Io(format!("serializing plan: {e}")))?;
         std::fs::write(path, json).map_err(|e| PlanError::Io(format!("{path:?}: {e}")))
     }
 
+    /// Read a plan, refusing any schema but `plan.v1`.
+    ///
+    /// The schema check is not a formality: the runner launches whatever a
+    /// plan tells it to, on a real device, so a document it half-understands
+    /// is worse than one it rejects.
     pub fn load(path: &Path) -> Result<Self, PlanError> {
         let text =
             std::fs::read_to_string(path).map_err(|e| PlanError::Io(format!("{path:?}: {e}")))?;

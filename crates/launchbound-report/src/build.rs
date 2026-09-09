@@ -8,13 +8,24 @@ use launchbound_bench::{BenchPlan, Results, indistinguishable};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+/// The documents a run directory holds, loaded into memory.
+///
+/// `verdicts.json` is required — a run that never gated is not a run this
+/// tool reports on. The other two are optional because `prune` alone
+/// produces a directory worth reporting, with no timings in it.
 pub struct RunDir {
+    /// `verdicts.json`, kept as raw JSON: it is the gate's output and this
+    /// crate reads rather than owns its shape.
     pub verdicts: Value,
+    /// `plan.json`, when the run got as far as planning a benchmark.
     pub plan: Option<BenchPlan>,
+    /// `results.json`, when the run got as far as measuring.
     pub results: Option<Results>,
 }
 
 impl RunDir {
+    /// Read a run directory. Fails if `verdicts.json` is missing or does
+    /// not declare `verdicts.v1`; tolerates the absence of the rest.
     pub fn load(dir: &Path) -> Result<Self, ReportError> {
         let verdicts_path = dir.join("verdicts.json");
         let text = std::fs::read_to_string(&verdicts_path).map_err(|e| {
@@ -45,6 +56,7 @@ impl RunDir {
         })
     }
 
+    /// A run directory path from a CLI argument.
     pub fn path_of(dir: &str) -> PathBuf {
         PathBuf::from(dir)
     }
@@ -71,6 +83,16 @@ fn rules_of(candidate: &Value) -> Vec<RuleRef> {
     rules
 }
 
+/// Assemble a `report.v1` document from a loaded run directory.
+///
+/// Joins the gate's verdicts to the measurements by candidate ID, picks the
+/// chosen configuration, and fills the two sections a reader acts on:
+/// candidates indistinguishable from the chosen one (overlapping intervals,
+/// reported rather than ranked) and refused candidates that measurably beat
+/// it.
+///
+/// Float ordering throughout uses [`f64::total_cmp`], so a NaN median
+/// produces a report rather than a panic — see `tests/nan_ranking.rs`.
 pub fn build_report(run: &RunDir) -> Result<Report, ReportError> {
     let kernel = run.verdicts["kernel"].as_str().unwrap_or("?").to_string();
     let gate_cc = run.verdicts["cc"].as_str().unwrap_or("?").to_string();

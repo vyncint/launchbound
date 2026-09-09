@@ -6,19 +6,27 @@
 //! correlation against real hardware attached (docs/LIMITATIONS.md): the model
 //! is gated on measured quality, not on plausibility.
 
+#![warn(missing_docs)]
+
 use launchbound_space::{Config, KernelSpec, eval_arith_expr};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+/// What can go wrong estimating a candidate.
 #[derive(Debug, thiserror::Error)]
 pub enum ModelError {
     // The known list is computed in the message, not carried in a second
     // field: adding a field to a public enum variant is a breaking change,
     // and 2.2.0 is a minor bump.
     #[error("unknown compute capability {cc:?} — the model has no device table for it; known: {known}", cc = .0, known = known_capabilities())]
+    /// A `--cc` with no row in [`DEVICES`]. The message lists the
+    /// capabilities that would have worked.
     UnknownCc(String),
+    /// The kernel's `[model]` section is missing, malformed, or names a
+    /// dimension the spec does not declare.
     #[error("kernel.toml [model]: {0}")]
     Spec(String),
+    /// The spec or one of its constraints did not load.
     #[error(transparent)]
     Space(#[from] launchbound_space::SpaceError),
 }
@@ -35,6 +43,8 @@ pub enum ModelError {
 /// of thing a reader believes.
 #[derive(Debug, Clone, Copy)]
 pub struct DeviceParams {
+    /// The capability this row describes, as `"<major>.<minor>"` — the
+    /// string `--cc` is matched against.
     pub cc: &'static str,
     /// Streaming multiprocessors on the named part. Not a capability fact.
     ///
@@ -44,8 +54,13 @@ pub struct DeviceParams {
     /// ordering only where the `.max(1.0)` clamp on waves bites. It matters
     /// for reading `waves` as a number, not for choosing between candidates.
     pub sm_count: u32,
+    /// Resident threads per SM. With `max_warps_per_sm` this is the same
+    /// fact twice — a warp is 32 threads — and a test holds them equal.
     pub max_threads_per_sm: u32,
+    /// Resident warps per SM; the occupancy denominator.
     pub max_warps_per_sm: u32,
+    /// Resident thread blocks per SM. Binds before the thread limit for
+    /// small blocks, which is why a 32-thread block rarely fills an SM.
     pub max_blocks_per_sm: u32,
     /// Statically allocatable shared memory per block, without the dynamic
     /// opt-in. 48 KiB on every architecture here — deliberately flat.
@@ -161,6 +176,19 @@ fn cc_parts(cc: &str) -> Option<(u32, u32)> {
     Some((major.parse().ok()?, minor.parse().ok()?))
 }
 
+/// Look up the capacity figures for a compute capability.
+///
+/// `cc` is matched exactly against [`DEVICES`], so `"8.6"` resolves and
+/// `"8.60"`, `"86"` and `"8"` do not. An unlisted capability is an error
+/// naming the ones that would have worked — never a nearest-neighbour
+/// guess, because a fabricated capacity still yields an occupancy number
+/// and an occupancy number is the sort of thing a reader believes.
+///
+/// ```
+/// let a10g = launchbound_model::device("8.6").unwrap();
+/// assert_eq!(a10g.max_warps_per_sm, 48);
+/// assert!(launchbound_model::device("6.1").is_err());
+/// ```
 pub fn device(cc: &str) -> Result<DeviceParams, ModelError> {
     DEVICES
         .iter()
@@ -186,11 +214,22 @@ pub fn known_capabilities() -> String {
 /// kernel's space — smaller is predicted faster. It is NOT a time.
 #[derive(Debug, Clone, Serialize)]
 pub struct Estimate {
+    /// The candidate's canonical `config.v1` ID, matching `verdicts.v1`
+    /// and `results.v1` for the same configuration.
     pub id: String,
+    /// Human-readable dimension assignments, e.g. `block_x=128 tile=256`.
     pub config: String,
+    /// Relative score, smaller predicted faster. Unitless, comparable only
+    /// within one kernel's space, and **not a time** — see
+    /// `docs/LIMITATIONS.md` for the measured rank correlation.
     pub cost: f64,
+    /// Achieved occupancy in `0.0..=1.0`: resident warps over the device
+    /// maximum, capped at 1.
     pub occupancy: f64,
+    /// Grid blocks divided by the blocks resident across all SMs, floored
+    /// at 1 — how many times the whole machine must be refilled.
     pub waves: f64,
+    /// Static shared memory this configuration requests, in bytes.
     pub smem_bytes: u64,
     /// Always "estimated" (docs/LIMITATIONS.md); serialized so every surface carries it.
     pub kind: &'static str,
