@@ -109,8 +109,9 @@ a T4.
 Its README says to expect bugs, incomplete features, and API breakage. The
 pins (CONTRIBUTING.md) move together or not at all. 2.2.0's bump put the
 cuda-oxide pin *at* upstream `main` (`26754ae5`) rather than behind it, which
-is a fact with a shelf life measured in days — `pins.yml` is what reports the
-drift, and the previous set had gone 133 commits stale precisely because that
+is a fact with a shelf life measured in days — `pins.yml` reports the drift
+every Monday, and names a toolchain move separately from commit churn. The
+previous set had gone 133 commits and one nightly stale precisely because that
 watch only ran when somebody dispatched it. cuda-oxide
 emits `.target sm_80` PTX for this corpus, so `needs_cc = "8.0"` across the
 board and nothing here runs on pre-Ampere parts. `cargo check` under the
