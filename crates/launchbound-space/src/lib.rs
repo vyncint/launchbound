@@ -58,6 +58,19 @@ impl Config {
 
     /// Total threads per block implied by this configuration. Absent block
     /// dimensions default to 1, matching CUDA launch semantics.
+    ///
+    /// Saturating, like [`grid_blocks`] in `launchbound-model`, and for the
+    /// same reason: the factors come from `kernel.toml`, and `.product()` over
+    /// three attacker-shaped `u64`s panics in a debug build and wraps in a
+    /// release one — where a wrapped value would then flow into `estimate` and
+    /// into the gate's `threads > WARP_SIZE` test and be believed.
+    ///
+    /// A valid spec cannot reach the saturation point: `KernelSpec` rejects a
+    /// block dimension above the CUDA per-axis limit at load, so the largest
+    /// product this can be asked for is 1024 x 1024 x 64. The saturation is
+    /// the floor under a `Config` built by some other route.
+    ///
+    /// [`grid_blocks`]: https://docs.rs/launchbound-model
     pub fn block_threads(&self) -> u64 {
         ["block_x", "block_y", "block_z"]
             .iter()
@@ -65,7 +78,7 @@ impl Config {
                 Some(Value::Int(n)) => *n,
                 _ => 1,
             })
-            .product()
+            .fold(1u64, |acc, n| acc.saturating_mul(n))
     }
 
     /// The canonical, stable ID: a versioned SHA-256 over the kernel name
@@ -269,6 +282,119 @@ mod tests {
         let spec = toy_spec();
         let configs = enumerate(&spec).unwrap();
         assert_eq!(configs[0].block_threads(), 32);
+    }
+
+    // `block_threads` folds three `kernel.toml` integers. `.product()`
+    // panicked in debug and wrapped in release, and a wrapped value went on
+    // to feed `estimate` and the gate's `threads > WARP_SIZE` test — a
+    // silently wrong launch shape, which is the one kind of wrong this
+    // project cannot ship. Saturating matches `grid_blocks`, its sibling.
+    //
+    // This constructs `Config` directly because a spec can no longer express
+    // these values: the load-time axis check rejects them. That is the point
+    // — belt and braces, and the proptest guards the braces.
+    proptest::proptest! {
+        #[test]
+        fn block_threads_never_panics_and_never_wraps(
+            x in proptest::prelude::any::<u64>(),
+            y in proptest::prelude::any::<u64>(),
+            z in proptest::prelude::any::<u64>(),
+        ) {
+            let mut values = BTreeMap::new();
+            values.insert("block_x".to_string(), Value::Int(x));
+            values.insert("block_y".to_string(), Value::Int(y));
+            values.insert("block_z".to_string(), Value::Int(z));
+            let config = Config { kernel: "proptest".to_string(), values };
+
+            let threads = config.block_threads();
+
+            if x == 0 || y == 0 || z == 0 {
+                proptest::prop_assert_eq!(threads, 0, "a zero axis is a zero block");
+            } else {
+                match x.checked_mul(y).and_then(|p| p.checked_mul(z)) {
+                    // Exact whenever the true product fits: saturating must
+                    // not change any answer that was already right.
+                    Some(exact) => proptest::prop_assert_eq!(threads, exact),
+                    // Otherwise pinned at the ceiling, never wrapped around to
+                    // a small number that would read as a legal block.
+                    None => proptest::prop_assert_eq!(threads, u64::MAX),
+                }
+            }
+        }
+    }
+
+    /// The specific value the issue names.
+    #[test]
+    fn a_block_axis_above_the_cuda_limit_is_refused_at_load() {
+        let err = KernelSpec::from_toml_str(
+            "toy",
+            r#"
+            [kernel]
+            name = "toy"
+            entry = "toy"
+            domain = 1
+            [dims.block_x]
+            values = [32, 2048]
+            "#,
+        )
+        .expect_err("block_x = 2048 must not load");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("2048"),
+            "message names the offending value: {msg}"
+        );
+        assert!(msg.contains("1024"), "message names the limit: {msg}");
+    }
+
+    /// z has a different limit (64), and saying "1024" there would be wrong.
+    #[test]
+    fn the_z_axis_limit_is_sixty_four() {
+        let err = KernelSpec::from_toml_str(
+            "toy",
+            r#"
+            [kernel]
+            name = "toy"
+            entry = "toy"
+            domain = 1
+            [dims.block_z]
+            values = [65]
+            "#,
+        )
+        .expect_err("block_z = 65 must not load");
+        assert!(err.to_string().contains("64"), "{err}");
+        // And 64 itself is fine.
+        KernelSpec::from_toml_str(
+            "toy",
+            r#"
+            [kernel]
+            name = "toy"
+            entry = "toy"
+            domain = 1
+            [dims.block_z]
+            values = [64]
+            "#,
+        )
+        .expect("block_z = 64 is the limit, not past it");
+    }
+
+    /// The limit applies to launch axes only; a spec dimension may be large.
+    #[test]
+    fn a_spec_dimension_is_not_capped_by_the_block_limit() {
+        KernelSpec::from_toml_str(
+            "toy",
+            r#"
+            [kernel]
+            name = "toy"
+            entry = "toy"
+            domain = 1
+            [dims.block_x]
+            values = [32]
+            [dims.elements]
+            role = "spec"
+            values = [1048576]
+            "#,
+        )
+        .expect("a spec dimension is not a block axis");
     }
 
     #[test]

@@ -6,6 +6,12 @@ use serde::Deserialize;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+/// CUDA's per-axis limits on a thread block, from the Programming Guide's
+/// compute-capability table. They have been these numbers since 2.x and are
+/// not capability-dependent, unlike the shared-memory and occupancy figures
+/// that `launchbound-model` keeps per device.
+const BLOCK_AXIS_LIMITS: [(&str, u64); 3] = [("block_x", 1024), ("block_y", 1024), ("block_z", 64)];
+
 /// One value a dimension can take.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Value {
@@ -182,6 +188,27 @@ impl KernelSpec {
                 return Err(SpaceError::Invalid(format!(
                     "dimension {name} has no values"
                 )));
+            }
+            // CUDA's per-axis block limits (Programming Guide, "Compute
+            // Capability" table: max x/y 1024, max z 64, and at most 1024
+            // threads per block overall). Refusing here means `block_threads`
+            // is never asked to multiply anything that could overflow, and it
+            // means the operator hears about a typo when the spec loads
+            // rather than as a launch failure ten minutes into a sweep. The
+            // product limit is not checkable here -- it depends on which
+            // values are drawn together, which is enumeration's job.
+            if let Some(axis) = BLOCK_AXIS_LIMITS.iter().find(|(n, _)| *n == name) {
+                let (_, limit) = axis;
+                for v in &values {
+                    if let Value::Int(n) = v
+                        && *n > *limit
+                    {
+                        return Err(SpaceError::Invalid(format!(
+                            "dimension {name}: {n} exceeds the CUDA limit of {limit} \
+                             threads on this axis (max 1024 per block overall)"
+                        )));
+                    }
+                }
             }
             let mut seen = values.clone();
             seen.sort();
