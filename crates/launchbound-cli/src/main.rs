@@ -42,8 +42,9 @@ enum Command {
         #[arg(long, default_value = "corpus")]
         corpus: PathBuf,
         /// Target compute capability for RC004 shared-memory context
-        /// (docs/SAFETY.md): 8.6 for A10G, 7.5 for T4. A verdict at one
-        /// --cc does not transfer to another.
+        /// (docs/SAFETY.md): 7.5 T4, 8.0 A100, 8.6 A10G, 8.9 L4/L40,
+        /// 9.0 H100, 10.0 B200. A verdict at one --cc does not transfer
+        /// to another.
         ///
         /// The gate checks thread convergence and static shared-memory
         /// capacity at this capability. It does NOT check that the device
@@ -131,6 +132,10 @@ enum Command {
         /// Target compute capability (cuda/model backends). Required, like
         /// `prune`'s and `model`'s: a verdict at one --cc does not transfer
         /// to another, and this is the command whose answer you act on.
+        ///
+        /// The model's device table is narrower than the gate's: `prune`
+        /// may accept a capability the model has no capacity figures for,
+        /// and says which it knows when it refuses one.
         #[arg(long, value_parser = parse_cc)]
         cc: String,
         /// Wall-clock budget, e.g. 30m, 90s, 1h. Honoured, resumably.

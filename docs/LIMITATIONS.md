@@ -85,6 +85,36 @@ entry are reported as UNCALIBRATED. Every estimate carries the `estimated`
 label and this correlation; an estimate presented as a measurement is a
 release-blocking defect.
 
+## The model's device table is narrower than the gate's
+
+`DEVICES` (`launchbound-model`) carries capacity figures for **7.5, 8.0,
+8.6, 8.9, 9.0 and 10.0** — T4, A100, A10G, L4/L40, H100 and B200. Every
+field but `sm_count` is a compute-capability fact from the CUDA C++
+Programming Guide's "Technical Specifications per Compute Capability"
+table; `sm_count` is a product fact, and each row names the part it came
+from. An unknown capability is an error listing the known ones, never a
+guess — a fabricated capacity would still produce an occupancy number, and
+an occupancy number is the sort of thing a reader believes.
+
+Two consequences worth stating:
+
+- **The gate knows more capabilities than the model.** reconverge's table
+  covers 7.0 through 12.0, so `prune --cc 12.0` can succeed where
+  `tune --backend model --cc 12.0` refuses. Pascal (6.x) and the embedded
+  parts (7.2, 8.7) are absent from both halves here because no corpus
+  kernel targets them and nothing in this project has run on one.
+- **`sm_count` barely affects ranking.** It enters only through
+  `waves = grid / (blocks_per_sm * sm_count)`, a constant divisor that
+  scales every candidate's cost alike; it changes an ordering only where
+  the `.max(1.0)` clamp on waves bites. It matters for reading `waves` as a
+  number, not for choosing between candidates. Two parts share a capability
+  and differ in SM count (L4 58 / L40 142, H100 SXM 132 / PCIe 114), and
+  the table picks one — the rows say which.
+
+Only 8.6 (A10G) and 7.5 (T4) have ever had a kernel measured on them here.
+The other four rows are documented capacity, not experience; the model's
+Spearman correlations below were measured on the A10G alone.
+
 ## Measurement noise floor
 
 On the A10G, repeated sweeps of identical configurations reproduced within
