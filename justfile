@@ -41,7 +41,7 @@ gate:
 prune cc="8.6":
     cargo run -q -p launchbound-cli -- prune --cc {{ cc }}
 
-# The six recorded pin sites agree with each other. No network: the
+# The recorded pin sites agree with each other. No network: the
 # dispatch-only `pins.yml` asks upstream, this asks ourselves — and a
 # watcher whose own baseline is stale reports drift from a version nothing
 # installs, which is how #17 came to describe a pin two releases old.

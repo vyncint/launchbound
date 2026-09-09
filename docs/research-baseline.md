@@ -172,3 +172,61 @@ are equivalent in general: reconverge gained multi-warp replay, bounded
 inlining and unmasked warp-wrapper analysis between these versions, and a
 kernel exercising those paths could well be decided differently. The corpus is
 the evidence, and the corpus is six kernels.
+
+## Lockstep bump: nightly-2026-08-28, cuda-oxide `26754ae5`, reconverge 0.6.0
+
+The three pins moved together for 2.2.0 (#50). The previous set —
+`nightly-2026-04-03`, cuda-oxide `50d07314`, reconverge 0.5.0 — was 133
+commits and one toolchain behind upstream, so the compile path could not
+build a kernel written against a current `cuda-device`.
+
+A pin bump can change **what the gate admits**, so the corpus was run under
+both sets and the output diffed, the same method §"Analyzer equivalence"
+used. Measured 2026-09-09, tier 0 (no GPU):
+
+```console
+$ cargo run -q -p launchbound-cli -- prune --cc 8.6      # both pin sets
+$ diff prune-old-pin.txt prune-new-pin.txt               # no output
+```
+
+| kernel | clean | caveats | refused | tool errors |
+|---|---|---|---|---|
+| histogram | 12 | 0 | 0 | 0 |
+| matmul-tiled | 18 | 0 | 0 | 0 |
+| reduce-flip | 3 | 0 | **8** | 0 |
+| reduce-stable | 11 | 0 | 0 | 0 |
+| scan-block | 4 | 0 | 0 | 0 |
+| stencil-1d | 45 | 0 | 0 | 0 |
+| **total** | **93** | **0** | **8** | **0** |
+
+**The two runs differ in no byte** — the same candidate hashes, the same
+eight `REFUSED RC001` lines, the same reasons, and the same totals the
+0.1.11 → 0.3.0 comparison recorded three weeks earlier. The gate tests pass
+unchanged (`known_flip_kernel_disqualifies_above_one_warp`,
+`known_stable_kernel_disqualifies_nothing`, `tool_error_is_a_hard_stop`).
+
+### The compile path, which is the half that was actually broken
+
+The prune leg never needed the bump — it is analysis only. The compile leg
+did: `launchbound-build` shells out to `cargo oxide inspect`, and that
+subcommand comes from the checkout the pin names. At the new pin every
+corpus kernel lowers to PTX:
+
+| kernel | `cargo oxide inspect` | PTX lines | `.visible .entry` | `.target` |
+|---|---|---|---|---|
+| histogram | ok | 109 | 1 | `sm_80` |
+| matmul-tiled | ok | 195 | 1 | `sm_80` |
+| reduce-flip | ok | 120 | 1 | `sm_80` |
+| reduce-stable | ok | 115 | 1 | `sm_80` |
+| scan-block | ok | 205 | 1 | `sm_80` |
+| stencil-1d | ok | 88 | 1 | `sm_80` |
+
+`cargo-oxide` 0.2.1, built from the pinned checkout — it is not published to
+crates.io, so there is no version to install and the checkout is the only
+source.
+
+**What this does and does not establish.** It establishes that the bump
+changes nothing this corpus can observe, and that the compile path works at
+the new pin on a machine with LLVM 21 and no CUDA toolkit. It does not
+establish that PTX *runs*: `inspect` lowers, it does not execute, and no GPU
+was involved in any line of this section. The corpus is still six kernels.

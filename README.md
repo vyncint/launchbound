@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](LICENSE-MIT)
 [![crates.io](https://img.shields.io/crates/v/launchbound-cli?label=crates.io&color=orange)](https://crates.io/crates/launchbound-cli)
-[![toolchain](https://img.shields.io/badge/toolchain-nightly--2026--04--03-orange)](rust-toolchain.toml)
+[![toolchain](https://img.shields.io/badge/toolchain-nightly--2026--08--28-orange)](rust-toolchain.toml)
 [![GPU](https://img.shields.io/badge/GPU-not%20required-brightgreen)](docs/ARCHITECTURE.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/vyncint/launchbound/ci.yml?label=CI)](https://github.com/vyncint/launchbound/actions/workflows/ci.yml)
 

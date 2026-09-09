@@ -170,8 +170,8 @@ wraps — and `cuda-oxide` requires the same pin. A bump is its own commit,
 never mixed with a behaviour change, and re-runs the affected stage gates.
 The `pins.yml` workflow reports upstream movement by opening an issue; it
 never bumps anything. Its weekly cron is commented out, so upstream movement
-is noticed when you dispatch it. Current pins: nightly-2026-04-03,
-cuda-oxide 50d07314, reconverge 0.5.0 (installed from crates.io).
+is noticed when you dispatch it. Current pins: nightly-2026-08-28,
+cuda-oxide 26754ae5, reconverge 0.6.0 (installed from crates.io).
 
 ## 10. License
 

@@ -16,8 +16,8 @@ permissions:
 # rust-toolchain.toml, and the action defaults (action/action.yml) — the
 # pins.yml issue body lists every site.
 env:
-  PINNED_TOOLCHAIN: nightly-2026-04-03
-  RECONVERGE_VERSION: "0.5.0"
+  PINNED_TOOLCHAIN: nightly-2026-08-28
+  RECONVERGE_VERSION: "0.6.0"
 
 jobs:
   gate:
@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: NVlabs/cuda-oxide
-          ref: 50d07314eb8b7d5ec821ba02b0048a753c20dd4e
+          ref: 26754ae52c26c097dc1c465a1e42c4c5d05a3d40
           path: cuda-oxide
       - name: Install pinned toolchain
         working-directory: launchbound

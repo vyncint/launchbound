@@ -51,7 +51,7 @@ inputs:
       reconverge-driver). Must be built by the toolchain below — the pins
       move together.
     required: false
-    default: "0.5.0"
+    default: "0.6.0"
   toolchain:
     description: >-
       The pinned nightly that matches reconverge-version; the pair moves
@@ -61,7 +61,7 @@ inputs:
       a different toolchain, pass a matching reconverge-version/toolchain
       pair.
     required: false
-    default: nightly-2026-04-03
+    default: nightly-2026-08-28
   summary:
     description: Write the verdict table to the job summary ("true"/"false").
     required: false
