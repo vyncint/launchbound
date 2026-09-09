@@ -22,9 +22,13 @@ maintainer moving between them is not relearning the process.
 gh workflow run stress.yml -f iterations=100
 gh run watch                    # ten shards, both OSes
 
-# 1. Bump the version. It appears once per crate plus the workspace pins.
-$EDITOR Cargo.toml              # version = "X.Y.Z"
+# 1. Bump the version. `workspace.package.version` AND the internal
+#    `version =` pins in [workspace.dependencies] -- both, or `just
+#    versions` fails. They are not cosmetic: pins left behind a major
+#    bump make `cargo metadata` refuse to resolve the workspace at all.
+$EDITOR Cargo.toml              # version = "X.Y.Z", and the eight pins
 cargo check --workspace         # refreshes Cargo.lock
+just versions                   # the two agree
 
 # 2. Move the CHANGELOG section: [Unreleased] -> [X.Y.Z] - YYYY-MM-DD,
 #    leaving an empty [Unreleased] above it.
@@ -70,6 +74,20 @@ tag had to be pushed by hand.
   ```sh
   gh workflow run install.yml
   ```
+- **Move the semver baseline, in a PR of its own after the publish.**
+  `baseline-version` in `ci.yml`'s `semver` job is a literal. Left at the old
+  release it compares every PR against a version nobody can install any more,
+  and it would also carry this release's own breaks forward as if they were
+  new. Moved *before* the publish it names a version that does not exist yet
+  and the job cannot fetch it. So: publish, confirm the index has it, then
+  bump the literal.
+
+  ```sh
+  $EDITOR .github/workflows/ci.yml   # baseline-version: X.Y.Z
+  ```
+- **A break needs the `breaking` label on its PR**, which switches the semver
+  job from `patch` to `major`. Without it the job fails, which is the point;
+  with it, the release notes owe the reader a migration note.
 
 ## What a version number means here
 
