@@ -286,10 +286,15 @@ fn run_candidate(
             | ArgSpec::InU32 { .. }
             | ArgSpec::OutF32 { .. }
             | ArgSpec::OutU32 { .. } => {
+                // The loop above materializes a buffer for exactly these
+                // four ArgSpec kinds, so the lookup succeeds — an invariant
+                // held one loop away from the code that needs it. This
+                // function returns a `Result`; a wrong answer here is a bug
+                // report, not a crash mid-benchmark.
                 let buf = &buffers
                     .iter()
                     .find(|(idx, _)| *idx == i)
-                    .expect("buffer materialized")
+                    .ok_or_else(|| format!("internal: argument {i} has no materialized buffer"))?
                     .1;
                 ptr_slots.push(buf.ptr);
                 slots.push(Slot::Ptr(ptr_slots.len() - 1));
@@ -424,11 +429,9 @@ impl Results {
     /// Atomic checkpoint: write to a temp file, then rename.
     pub fn checkpoint(&self, path: &Path) -> Result<(), String> {
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(
-            &tmp,
-            serde_json::to_string_pretty(self).expect("results serialize"),
-        )
-        .map_err(|e| e.to_string())?;
+        let json =
+            serde_json::to_string_pretty(self).map_err(|e| format!("serializing results: {e}"))?;
+        std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
         std::fs::rename(&tmp, path).map_err(|e| e.to_string())
     }
 }

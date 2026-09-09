@@ -8,7 +8,12 @@ mod render;
 pub use build::{RunDir, build_report};
 pub use render::render_text;
 
-use launchbound_bench::Summary;
+// Re-exported, not merely used: `Summary` appears in the public fields of
+// `CandidateReport`, `ChosenInfo` and `RejectedFaster`, so a caller that reads
+// a report has to be able to name it. Without this the type was reachable and
+// unnameable unless you also depended on `launchbound-bench` directly.
+pub use launchbound_bench::Summary;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]

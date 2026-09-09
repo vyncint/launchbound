@@ -232,7 +232,8 @@ impl BenchSpec {
 
 impl BenchPlan {
     pub fn write(&self, path: &Path) -> Result<(), PlanError> {
-        let json = serde_json::to_string_pretty(self).expect("plan serializes");
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| PlanError::Io(format!("serializing plan: {e}")))?;
         std::fs::write(path, json).map_err(|e| PlanError::Io(format!("{path:?}: {e}")))
     }
 

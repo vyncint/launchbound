@@ -45,7 +45,12 @@ impl ArtifactCache {
 
     pub fn store(&self, kernel: &str, hash: &str, ptx: &str) -> Result<PathBuf, BuildError> {
         let path = self.ptx_path(kernel, hash);
-        let dir = path.parent().expect("cache path has a parent");
+        // `ptx_path` always joins at least one component, so this holds — but
+        // it holds in *another function*, and `store` already returns a
+        // `Result`. Say it here rather than assert it from a distance.
+        let dir = path
+            .parent()
+            .ok_or_else(|| BuildError::Cache(format!("{} has no parent", path.display())))?;
         std::fs::create_dir_all(dir).map_err(|e| BuildError::Cache(e.to_string()))?;
         std::fs::write(&path, ptx).map_err(|e| BuildError::Cache(e.to_string()))?;
         let meta = Meta {
@@ -57,11 +62,9 @@ impl ArtifactCache {
                 .unwrap_or(0),
         };
         let meta_path = path.with_extension("meta.json");
-        std::fs::write(
-            meta_path,
-            serde_json::to_string_pretty(&meta).expect("meta serializes"),
-        )
-        .map_err(|e| BuildError::Cache(e.to_string()))?;
+        let meta_json = serde_json::to_string_pretty(&meta)
+            .map_err(|e| BuildError::Cache(format!("serializing cache metadata: {e}")))?;
+        std::fs::write(meta_path, meta_json).map_err(|e| BuildError::Cache(e.to_string()))?;
         Ok(path)
     }
 }

@@ -251,14 +251,9 @@ fn draw_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 Style::default().add_modifier(Modifier::BOLD),
             )));
 
-            let best = measured[0]
-                .summary
-                .as_ref()
-                .expect("filtered on Some")
-                .median_ms;
+            let best = measured[0].1.median_ms;
             let chosen_id = r.chosen.as_ref().map(|c| c.id.as_str());
-            for candidate in measured.iter().take(room) {
-                let summary = candidate.summary.as_ref().expect("filtered on Some");
+            for (candidate, summary) in measured.iter().take(room) {
                 // Relative to the fastest, not to the chosen: when the chosen
                 // one was refused a faster rival the difference is the whole
                 // story, and anchoring on the winner would hide it.
@@ -288,22 +283,36 @@ fn draw_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     );
 }
 
-/// Every measured candidate, fastest first.
+/// Every measured candidate, fastest first, each paired with the summary that
+/// made it measured.
 ///
 /// Shared by the overview and the ranking so the two can never disagree about
 /// what "next fastest" means — the overview shows the head of exactly the list
 /// view 2 pages through.
-fn measured_fastest_first(app: &App) -> Vec<&launchbound_report::CandidateReport> {
+///
+/// The pair is the point. Filtering on `summary.is_some()` and returning bare
+/// candidates left every caller to `unwrap()` on the strength of a filter
+/// performed in *this* function; the invariant and the code relying on it
+/// lived in different places, and a change to the filter would have broken the
+/// callers silently. Returning `&Summary` moves the guarantee into the type,
+/// where the compiler keeps it.
+///
+/// Ordering uses [`f64::total_cmp`], so a NaN median sorts to one end instead
+/// of panicking.
+fn measured_fastest_first(
+    app: &App,
+) -> Vec<(
+    &launchbound_report::CandidateReport,
+    &launchbound_report::Summary,
+)> {
     let mut measured: Vec<_> = app
         .report
         .candidates
         .iter()
-        .filter(|c| c.measurement_status == "ok" && c.summary.is_some())
+        .filter(|c| c.measurement_status == "ok")
+        .filter_map(|c| c.summary.as_ref().map(|s| (c, s)))
         .collect();
-    measured.sort_by(|a, b| {
-        let (sa, sb) = (a.summary.as_ref().unwrap(), b.summary.as_ref().unwrap());
-        sa.median_ms.partial_cmp(&sb.median_ms).expect("no NaN")
-    });
+    measured.sort_by(|(_, sa), (_, sb)| sa.median_ms.total_cmp(&sb.median_ms));
     measured
 }
 
@@ -313,8 +322,7 @@ fn draw_ranking(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let items: Vec<ListItem<'_>> = measured
         .iter()
         .skip(app.scroll)
-        .map(|c| {
-            let s = c.summary.as_ref().unwrap();
+        .map(|(c, s)| {
             let marker = if Some(c.id.as_str()) == chosen_id {
                 "»"
             } else if c.verdict == "disqualified" {
