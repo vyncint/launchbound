@@ -626,7 +626,7 @@ fn cmd_tune(
                 })
                 .map(|cv| estimate(&spec, &cv.config, &dev).map(|e| (cv, e)))
                 .collect::<Result<_, _>>()?;
-            admitted.sort_by(|a, b| a.1.cost.partial_cmp(&b.1.cost).expect("no NaN"));
+            admitted.sort_by(|a, b| a.1.cost.total_cmp(&b.1.cost));
             for (cv, est) in admitted.iter().take(10) {
                 println!(
                     "  estimated {}  {}  cost {:.3}",
@@ -774,7 +774,7 @@ fn cmd_model(
     }
 
     let mut ranked: Vec<_> = estimates.iter().collect();
-    ranked.sort_by(|a, b| a.cost.partial_cmp(&b.cost).expect("no NaN costs"));
+    ranked.sort_by(|a, b| a.cost.total_cmp(&b.cost));
     println!(
         "{} — ESTIMATED ranking (analytical model, cc {cc}; not a measurement):",
         spec.name

@@ -132,12 +132,16 @@ pub fn build_report(run: &RunDir) -> Result<Report, ReportError> {
                 "clean" | "admitted_with_caveats" | "ungated"
             ) && c.measurement_status == "ok"
         })
-        .filter_map(|c| c.summary.as_ref().map(|s| (c, s.median_ms)))
-        .min_by(|a, b| a.1.partial_cmp(&b.1).expect("no NaN medians"))
-        .map(|(c, _)| ChosenInfo {
+        // Carry the summary, not just its median: the `filter_map` above is
+        // what proves it exists, and re-reaching for `c.summary` afterwards
+        // put the proof and the use in different expressions. `s` is the
+        // guarantee, held in the type.
+        .filter_map(|c| c.summary.as_ref().map(|s| (c, s)))
+        .min_by(|a, b| a.1.median_ms.total_cmp(&b.1.median_ms))
+        .map(|(c, s)| ChosenInfo {
             id: c.id.clone(),
             config: c.config.clone(),
-            summary: c.summary.clone().expect("chosen is measured"),
+            summary: s.clone(),
         });
 
     let mut indistinguishable_from_chosen = Vec::new();
@@ -166,11 +170,7 @@ pub fn build_report(run: &RunDir) -> Result<Report, ReportError> {
                 });
             }
         }
-        rejected_faster.sort_by(|a, b| {
-            b.speedup_vs_chosen
-                .partial_cmp(&a.speedup_vs_chosen)
-                .expect("no NaN speedups")
-        });
+        rejected_faster.sort_by(|a, b| b.speedup_vs_chosen.total_cmp(&a.speedup_vs_chosen));
     }
 
     let total = candidates.len();

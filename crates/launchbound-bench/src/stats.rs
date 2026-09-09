@@ -23,12 +23,22 @@ pub struct Summary {
 /// Summarize raw timings. The Tukey fences (1.5 IQR) run first; the median
 /// CI uses the normal approximation to the binomial order-statistic
 /// interval, clamped to the sample range.
+///
+/// # NaN
+///
+/// A NaN timing cannot be ordered against anything, so the sort uses
+/// [`f64::total_cmp`], which is total: `-NaN` sorts below `-inf` and `+NaN`
+/// above `+inf`. A NaN then fails both fence comparisons and is *rejected as
+/// an outlier*, counted in `outliers_rejected`. If enough of them poison the
+/// quantiles that nothing survives the fences, the result is `None` — which
+/// is the honest summary of a sample that has none. Nothing here panics on a
+/// NaN, and no NaN reaches `median_ms`.
 pub fn summarize(samples_ms: &[f64]) -> Option<Summary> {
     if samples_ms.is_empty() {
         return None;
     }
     let mut sorted: Vec<f64> = samples_ms.to_vec();
-    sorted.sort_by(|a, b| a.partial_cmp(b).expect("no NaN timings"));
+    sorted.sort_by(f64::total_cmp);
 
     let q1 = quantile(&sorted, 0.25);
     let q3 = quantile(&sorted, 0.75);
@@ -96,6 +106,45 @@ mod tests {
         assert_eq!(s.outliers_rejected, 1);
         assert!(s.median_ms > 0.99 && s.median_ms < 1.01);
         assert!(s.ci95_lo_ms <= s.median_ms && s.median_ms <= s.ci95_hi_ms);
+    }
+
+    // A NaN timing used to be an `expect("no NaN timings")` away from taking
+    // the process down. `total_cmp` orders it, the Tukey fences reject it, and
+    // `summarize` keeps its contract: a value or `None`, never a panic.
+    #[test]
+    fn a_nan_timing_is_rejected_as_an_outlier_and_never_panics() {
+        let mut samples: Vec<f64> = (0..50).map(|i| 1.0 + (i % 7) as f64 * 0.001).collect();
+        samples.push(f64::NAN);
+        let s = summarize(&samples).expect("a summary, not a panic");
+        assert!(
+            s.outliers_rejected >= 1,
+            "the NaN must not survive the fences"
+        );
+        assert!(
+            s.median_ms.is_finite(),
+            "median {} is not finite",
+            s.median_ms
+        );
+        assert!(s.ci95_lo_ms.is_finite() && s.ci95_hi_ms.is_finite());
+        assert!(s.ci95_lo_ms <= s.median_ms && s.median_ms <= s.ci95_hi_ms);
+    }
+
+    // All-NaN is the honest `None`, not a crash and not a fabricated number.
+    #[test]
+    fn an_all_nan_sample_summarizes_to_none() {
+        assert!(summarize(&[f64::NAN; 8]).is_none());
+    }
+
+    // Both signs, and the infinities, since `total_cmp` treats them as
+    // distinct ends of the order.
+    #[test]
+    fn every_non_finite_shape_is_survivable() {
+        for probe in [f64::NAN, -f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut samples: Vec<f64> = (0..30).map(|i| 1.0 + (i % 5) as f64 * 0.001).collect();
+            samples.push(probe);
+            // The only requirement is that it returns.
+            let _ = summarize(&samples);
+        }
     }
 
     #[test]

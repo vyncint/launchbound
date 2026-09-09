@@ -198,7 +198,7 @@ pub fn spearman(xs: &[f64], ys: &[f64]) -> Option<f64> {
 
 fn ranks(values: &[f64]) -> Vec<f64> {
     let mut order: Vec<usize> = (0..values.len()).collect();
-    order.sort_by(|&a, &b| values[a].partial_cmp(&values[b]).expect("no NaN"));
+    order.sort_by(|&a, &b| values[a].total_cmp(&values[b]));
     let mut out = vec![0.0; values.len()];
     let mut i = 0;
     while i < order.len() {
@@ -232,6 +232,40 @@ mod tests {
         assert!(spearman(&[1.0, 2.0], &[1.0, 2.0]).is_none());
         let r = spearman(&[1.0, 1.0, 2.0, 3.0], &[5.0, 5.0, 7.0, 9.0]).unwrap();
         assert!(r > 0.99);
+    }
+
+    // `spearman` is public and takes any `&[f64]` a caller has. Its `ranks`
+    // helper sorted with `partial_cmp(..).expect("no NaN")`, so a NaN
+    // argument -- a correlation against a column with one missing
+    // measurement, say -- took the process down from safe code. `total_cmp`
+    // orders it instead; the correlation that comes back is meaningless, but
+    // it is a value, and the caller is still running to notice.
+    #[test]
+    fn a_nan_in_either_sample_does_not_panic() {
+        let xs = [1.0, 2.0, f64::NAN, 4.0, 5.0];
+        let ys = [10.0, 20.0, 30.0, 40.0, 50.0];
+        let _ = spearman(&xs, &ys);
+        let _ = spearman(&ys, &xs);
+        let _ = spearman(&xs, &xs);
+        let both_nan = [f64::NAN; 5];
+        let _ = spearman(&both_nan, &ys);
+        // Infinities were always orderable, but they share the code path.
+        let inf = [1.0, f64::INFINITY, 3.0, f64::NEG_INFINITY, 5.0];
+        let _ = spearman(&inf, &ys);
+    }
+
+    // Ranking is still correct for ordinary input -- `total_cmp` and
+    // `partial_cmp` agree on every pair of non-NaN floats.
+    #[test]
+    fn total_cmp_did_not_change_the_ranking_of_ordinary_samples() {
+        assert_eq!(
+            spearman(&[1.0, 2.0, 3.0, 4.0], &[10.0, 20.0, 30.0, 40.0]),
+            Some(1.0)
+        );
+        assert_eq!(
+            spearman(&[3.0, 1.0, 4.0, 1.5], &[3.0, 1.0, 4.0, 1.5]),
+            Some(1.0)
+        );
     }
 
     #[test]
