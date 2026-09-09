@@ -85,6 +85,39 @@ entry are reported as UNCALIBRATED. Every estimate carries the `estimated`
 label and this correlation; an estimate presented as a measurement is a
 release-blocking defect.
 
+## `launch_bounds` and registers are not validated
+
+launchbound never reads a register count. It does not know how many
+registers a candidate uses, so it cannot tell you that one will spill to
+local memory, or that a `#[launch_bounds(N)]` request will fail to achieve
+the occupancy it asks for. It does not check `#[launch_contract]` against
+grid limits either.
+
+This matters because the corpus *narrates* register pressure without
+checking it: `stencil-1d/kernel.toml` opens with "the tuning story is
+UNROLL × RADIUS × launch_bounds against the register file", and `lb_max` is
+a real tuning dimension in two kernels. A reader arriving from cuda-oxide's
+documentation, where `#[launch_bounds]` is a register-budgeting tool, will
+reasonably assume the autotuner named *launchbound* validates it. It does
+not, and the name does not help.
+
+The one `.maxntid` relationship the corpus enforces —
+`exprs = ["block_x <= lb_max"]` in `stencil-1d` — holds because the kernel
+author wrote it as a constraint and the constraint evaluator does what it
+is told. launchbound attaches no meaning to `lb_max`; omit the expression
+and nothing catches a block larger than its own `.maxntid`. The occupancy
+model reads `block_threads` and shared memory, and nothing else about the
+launch.
+
+What would close the gap: the PTX is already available from
+`cargo oxide inspect`, and it carries `.maxntid` and register counts. A
+rule reading them would be a new rule — with its own measured result, its
+own calibration entry, and its own row in this file. It is not a
+documentation change.
+
+The README states the same boundary in its
+["What it is, and is not"](../README.md#what-it-is-and-is-not) section.
+
 ## The model's device table is narrower than the gate's
 
 `DEVICES` (`launchbound-model`) carries capacity figures for **7.5, 8.0,
