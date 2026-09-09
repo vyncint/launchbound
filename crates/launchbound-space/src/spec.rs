@@ -15,7 +15,9 @@ const BLOCK_AXIS_LIMITS: [(&str, u64); 3] = [("block_x", 1024), ("block_y", 1024
 /// One value a dimension can take.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Value {
+    /// A non-negative integer, e.g. a `block_x` or `tile` size.
     Int(u64),
+    /// A string, for dimensions whose values are names rather than sizes.
     Str(String),
 }
 
@@ -42,8 +44,12 @@ pub enum DimRole {
 /// One tunable dimension.
 #[derive(Debug, Clone)]
 pub struct Dim {
+    /// Dimension name, matching the `params.rs` constant it rewrites and
+    /// the identifier constraints refer to. `[a-z0-9_]` only.
     pub name: String,
+    /// Whether this changes the launch shape or the compiled source.
     pub role: DimRole,
+    /// The values to enumerate, in declaration order, deduplicated at load.
     pub values: Vec<Value>,
 }
 
@@ -62,6 +68,7 @@ pub enum SafetyExpectation {
 /// A kernel's declared tuning space, loaded from `kernel.toml`.
 #[derive(Debug, Clone)]
 pub struct KernelSpec {
+    /// Kernel name, matching the corpus directory.
     pub name: String,
     /// The `#[kernel]` entry function name.
     pub entry: String,
@@ -69,10 +76,15 @@ pub struct KernelSpec {
     pub domain: u8,
     /// Minimum compute capability the kernel needs, e.g. "7.0".
     pub needs_cc: Option<String>,
+    /// What the corpus asserts this kernel's gate result should be, so a
+    /// regression in the analyzer shows up as a corpus failure.
     pub known: SafetyExpectation,
     /// Directory holding the kernel crate (where kernel.toml lives).
     pub dir: PathBuf,
+    /// Every declared dimension, sorted by name — the order that makes
+    /// [`crate::Config::id`] canonical.
     pub dims: Vec<Dim>,
+    /// Expressions every enumerated configuration must satisfy.
     pub constraints: Vec<Constraint>,
 }
 
@@ -245,6 +257,7 @@ impl KernelSpec {
         })
     }
 
+    /// One dimension by name, or `None` if the spec does not declare it.
     pub fn dim(&self, name: &str) -> Option<&Dim> {
         self.dims.iter().find(|d| d.name == name)
     }

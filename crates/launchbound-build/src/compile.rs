@@ -17,7 +17,10 @@ pub enum Executor {
     /// Run `bash -lc <script>` directly (a Linux host with the toolchain).
     Direct,
     /// Run inside an Apple `container` guest: `container exec <name> bash -lc`.
-    Container { name: String },
+    Container {
+        /// The `container` guest to exec into.
+        name: String,
+    },
 }
 
 impl Executor {
@@ -58,8 +61,16 @@ impl Executor {
     }
 }
 
+/// Compiles one specialization at a time, through the cache.
+///
+/// Every candidate in a space shares a kernel and differs only in its spec
+/// dimensions, so most of a sweep is cache hits after the first pass. The
+/// compiler is deliberately stateful about that: `compiles` is what proves
+/// the cache is doing its job.
 pub struct Compiler {
+    /// How to reach `cargo oxide` on this host.
     pub executor: Executor,
+    /// Where compiled PTX is kept between candidates and between runs.
     pub cache: ArtifactCache,
     /// Compiles performed (cache misses); lets tests prove a hit did no work.
     pub compiles: u32,
@@ -68,12 +79,16 @@ pub struct Compiler {
 /// One compiled artifact.
 #[derive(Debug, Clone)]
 pub struct Artifact {
+    /// Where the PTX landed in the cache.
     pub ptx_path: PathBuf,
+    /// Hash of the specialized source, and the cache key that produced it.
     pub source_hash: String,
+    /// Whether this call compiled anything.
     pub outcome: CacheOutcome,
 }
 
 impl Compiler {
+    /// A compiler over this executor and cache, having compiled nothing.
     pub fn new(executor: Executor, cache: ArtifactCache) -> Self {
         Compiler {
             executor,

@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// How to run the gate.
 pub struct PruneOptions {
     /// Target compute capability, e.g. "8.6". Mandatory: RC004's
     /// shared-memory context depends on it (docs/SAFETY.md).
@@ -28,7 +29,9 @@ pub struct PruneOptions {
 /// The gate's output for one candidate.
 #[derive(Debug, Clone)]
 pub struct CandidateVerdict {
+    /// The configuration that was analyzed.
     pub config: Config,
+    /// What the gate decided for it.
     pub verdict: Verdict,
 }
 

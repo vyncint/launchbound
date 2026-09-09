@@ -7,12 +7,15 @@
 use libloading::Library;
 use std::ffi::c_void;
 
+/// A CUDA driver API status code. `0` is `CUDA_SUCCESS`; anything else is
+/// reported with the name of the call that returned it.
 pub type CUresult = i32;
 type CUdeviceptr = u64;
 
 macro_rules! driver_api {
     ($( $name:ident : fn( $($arg:ty),* ) ; )*) => {
         // Fields carry the C symbol names verbatim.
+        /// The driver entry points this crate uses, resolved at runtime.
         #[allow(non_snake_case)]
         pub struct Cuda {
             _lib: Library,
@@ -77,27 +80,45 @@ fn check(what: &str, code: CUresult) -> Result<(), String> {
     }
 }
 
+/// An initialized CUDA device with a primary context retained.
+///
+/// Opening one is what a machine without a GPU cannot do; every other type
+/// here borrows from it, so nothing can outlive the context it was
+/// allocated in.
 pub struct Device {
     cuda: Cuda,
     ctx: *mut c_void,
+    /// Product name as the driver reports it, e.g. `NVIDIA A10G`.
     pub name: String,
+    /// Compute capability as `"<major>.<minor>"`.
     pub cc: String,
+    /// Driver version, recorded in `results.v1` for provenance.
     pub driver_version: String,
 }
 
+/// A loaded PTX module, borrowed from the device that holds it.
 pub struct Module<'d> {
     device: &'d Device,
     module: *mut c_void,
+    /// The resolved entry function, ready to pass to a launch.
     pub function: *mut c_void,
 }
 
+/// A device allocation, freed when dropped.
 pub struct Buffer<'d> {
     device: &'d Device,
+    /// The device pointer, as a launch's parameter table needs it.
     pub ptr: CUdeviceptr,
+    /// Allocated size in bytes.
     pub bytes: usize,
 }
 
 impl Device {
+    /// Load the driver, initialize it, and retain a primary context on
+    /// device 0.
+    ///
+    /// Fails with a readable message rather than a panic when there is no
+    /// driver to load — which is the normal state on CI and on the Mac.
     pub fn open() -> Result<Self, String> {
         let cuda = Cuda::load()?;
         unsafe {
@@ -147,6 +168,7 @@ impl Device {
         }
     }
 
+    /// Load PTX and resolve one entry function by name.
     pub fn load_module(&self, ptx: &str, entry: &str) -> Result<Module<'_>, String> {
         let mut ptx_z = ptx.as_bytes().to_vec();
         ptx_z.push(0);
@@ -174,6 +196,7 @@ impl Device {
         }
     }
 
+    /// Allocate `bytes` of device memory.
     pub fn alloc(&self, bytes: usize) -> Result<Buffer<'_>, String> {
         let mut ptr = 0u64;
         unsafe { check("cuMemAlloc", (self.cuda.cuMemAlloc_v2)(&mut ptr, bytes))? };
@@ -184,6 +207,7 @@ impl Device {
         })
     }
 
+    /// Copy host bytes into a device buffer. `data` must fit.
     pub fn copy_in(&self, buffer: &Buffer<'_>, data: &[u8]) -> Result<(), String> {
         assert!(data.len() <= buffer.bytes);
         unsafe {
@@ -194,6 +218,7 @@ impl Device {
         }
     }
 
+    /// Copy device bytes back into a host slice. `out` must fit.
     pub fn copy_out(&self, buffer: &Buffer<'_>, out: &mut [u8]) -> Result<(), String> {
         assert!(out.len() <= buffer.bytes);
         unsafe {
@@ -204,6 +229,11 @@ impl Device {
         }
     }
 
+    /// Block until the context's queued work has finished.
+    ///
+    /// Timings come from CUDA events rather than from wrapping this, so a
+    /// measurement excludes launch and transfer overhead that a real
+    /// application pays (`docs/LIMITATIONS.md`).
     pub fn synchronize(&self) -> Result<(), String> {
         unsafe { check("cuCtxSynchronize", (self.cuda.cuCtxSynchronize)()) }
     }

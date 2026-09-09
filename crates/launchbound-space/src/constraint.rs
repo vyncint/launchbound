@@ -22,6 +22,13 @@ enum Token {
     Cmp(&'static str),
 }
 
+/// One `[constraints]` expression, parsed once and evaluated per candidate.
+///
+/// A constraint prunes the cartesian product before anything is compiled or
+/// measured: `tile % block_x == 0` removes the combinations a kernel cannot
+/// use. It is the author's statement about their own kernel, not an
+/// analysis — launchbound evaluates it and attaches no meaning to the
+/// dimension names.
 #[derive(Debug, Clone)]
 pub struct Constraint {
     text: String,
@@ -31,10 +38,16 @@ pub struct Constraint {
 }
 
 impl Constraint {
+    /// The expression as written in `kernel.toml`, for error messages.
     pub fn text(&self) -> &str {
         &self.text
     }
 
+    /// Parse one expression, checking every identifier against `dims`.
+    ///
+    /// Unknown identifiers are refused here rather than at evaluation, so a
+    /// typo in `kernel.toml` is reported once at load instead of once per
+    /// candidate.
     pub fn parse(expr: &str, dims: &[&str]) -> Result<Self, SpaceError> {
         let err = |reason: &str| SpaceError::Constraint {
             expr: expr.to_string(),
@@ -73,6 +86,13 @@ impl Constraint {
         })
     }
 
+    /// Does this configuration satisfy the constraint?
+    ///
+    /// Arithmetic that would overflow or divide by zero is an
+    /// [`SpaceError::Constraint`], never a silent `false`: a candidate
+    /// dropped because the constraint could not be computed is
+    /// indistinguishable from one the author meant to exclude, and the two
+    /// need different fixes.
     pub fn eval(&self, config: &Config) -> Result<bool, SpaceError> {
         let resolve = config_resolver(config);
         let l = eval_arith(&self.lhs, &resolve, &self.text)?;

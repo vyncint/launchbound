@@ -19,11 +19,17 @@ pub const WARP_SIZE: u64 = 32;
 pub enum AnalyzerOutcome {
     /// Exit 0 or 1 with a parsed findings document.
     Findings {
+        /// The analyzer's exit code: 0 clean, 1 findings present.
         exit_code: i32,
+        /// The union of findings across the documents it printed.
         findings: Vec<Finding>,
     },
     /// Exit 2, a crash, or unparseable output: a hard stop, never a pass.
-    ToolError { detail: String },
+    ToolError {
+        /// What went wrong, for the operator. An unanswerable candidate is
+        /// reported, never silently admitted.
+        detail: String,
+    },
 }
 
 /// The gate's verdict for one candidate configuration.
@@ -34,11 +40,20 @@ pub enum Verdict {
     Clean,
     /// Launch-shape-independent findings exist; the candidate proceeds and
     /// the caveats appear in the report.
-    AdmittedWithCaveats { caveats: Vec<CaveatRecord> },
+    AdmittedWithCaveats {
+        /// Findings that do not depend on the launch shape.
+        caveats: Vec<CaveatRecord>,
+    },
     /// Refused. The record names the rule and points at the source.
-    Disqualified { records: Vec<RejectionRecord> },
+    Disqualified {
+        /// Why, one entry per rule that fired at this configuration.
+        records: Vec<RejectionRecord>,
+    },
     /// The analyzer could not answer: hard stop for this candidate.
-    ToolError { detail: String },
+    ToolError {
+        /// What went wrong.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for Verdict {
@@ -76,10 +91,15 @@ impl std::fmt::Display for Verdict {
     }
 }
 
+/// One reason a candidate was refused, as it appears in `verdicts.v1` and
+/// in the TUI's rejection view.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RejectionRecord {
+    /// The analyzer rule that fired, e.g. `RC001`.
     pub rule: String,
+    /// reconverge's confidence: `warning`, `deny` or `confirmed`.
     pub confidence: String,
+    /// The analyzer's one-line summary.
     pub message: String,
     /// `file:line:col` of the offending site, if the analyzer gave one.
     pub span: Option<String>,
@@ -87,11 +107,18 @@ pub struct RejectionRecord {
     pub reason: String,
 }
 
+/// A finding that does not depend on the launch shape, so it cannot
+/// disqualify a particular configuration — carried into the report instead,
+/// where a reader can weigh it.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CaveatRecord {
+    /// The analyzer rule that fired.
     pub rule: String,
+    /// reconverge's confidence for it.
     pub confidence: String,
+    /// The analyzer's one-line summary.
     pub message: String,
+    /// `file:line:col`, if the analyzer gave one.
     pub span: Option<String>,
 }
 

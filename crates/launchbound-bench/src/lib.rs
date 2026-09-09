@@ -4,6 +4,8 @@
 //! 95% CI, and the outlier rule; overlapping intervals are reported as
 //! indistinguishable, never ranked (docs/BENCHMARKING.md).
 
+#![warn(missing_docs)]
+
 pub mod cuda;
 pub mod plan;
 pub mod run;

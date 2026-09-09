@@ -6,7 +6,7 @@ default: ci
 # "all required jobs green" aggregator job in ci.yml — this recipe is the
 # aggregator, and the `ci` job runs it verbatim on both OSes — so a new gate
 # becomes required by being listed here.
-ci: fmt-check clippy test deny schemas pins versions skill
+ci: fmt-check clippy test docs deny schemas pins versions skill
 
 # Cargo errors on a memberless virtual workspace, so the cargo recipes no-op
 # until the first crate lands in S1. `grep -c` prints 1 when packages is empty.
@@ -23,6 +23,14 @@ clippy:
 
 test:
     @[ "{{ _empty }}" = "1" ] && echo "test: skipped, workspace empty until S1" || cargo test --workspace
+
+# Rustdoc with warnings denied, and `missing_docs` on in every library
+# crate. It cost nothing to turn on -- `cargo doc` was already at zero
+# warnings -- and it caught two broken intra-doc links in the very commit
+# that added it, one of them pointing at a function whose name I had
+# misremembered.
+docs:
+    @[ "{{ _empty }}" = "1" ] && echo "docs: skipped, workspace empty until S1" || RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 deny:
     @[ "{{ _empty }}" = "1" ] && echo "deny: skipped, workspace empty until S1" || cargo deny check

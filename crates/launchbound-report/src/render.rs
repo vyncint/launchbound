@@ -9,6 +9,12 @@ pub fn launchbound_metal_notice() -> &'static str {
     "NO convergence gate exists on the Metal path: the same bug class is NOT checked"
 }
 
+/// Render a report as plain text for a terminal.
+///
+/// The no-gate notice is emitted unconditionally when
+/// `convergence_gate` is `none`, and a test asserts it cannot be omitted:
+/// a Metal report that looked like a CUDA report would be the most
+/// dangerous output this tool could produce.
 pub fn render_text(report: &Report) -> String {
     let mut out = String::new();
     let device = report

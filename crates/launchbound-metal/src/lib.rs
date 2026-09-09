@@ -7,6 +7,8 @@
 //! checked. Every result this module produces carries `backend = "metal"`,
 //! and the report renderer refuses to omit the notice.
 
+#![warn(missing_docs)]
+
 use launchbound_bench::Results;
 #[cfg(target_os = "macos")]
 use launchbound_bench::{CandidateResult, summarize};
@@ -16,10 +18,15 @@ use launchbound_space::{Config, DimRole, KernelSpec, Value};
 pub const METAL_NO_GATE_NOTICE: &str =
     "NO convergence gate exists on the Metal path: the same bug class is NOT checked";
 
+/// What can go wrong on the Metal path.
 #[derive(Debug, thiserror::Error)]
 pub enum MetalError {
+    /// The Metal runtime refused: no device, a pipeline that would not
+    /// build, or a command buffer that failed.
     #[error("metal backend: {0}")]
     Backend(String),
+    /// `kernel.metal` could not be read, or its `constant constexpr`
+    /// parameters did not match the spec's dimensions.
     #[error("kernel.metal: {0}")]
     Source(String),
 }
@@ -71,6 +78,10 @@ pub fn run_metal(
     imp::run_metal(spec, configs, budget_secs, progress)
 }
 
+/// The non-macOS stub: always `Err`, so a Metal run fails loudly on Linux
+/// rather than silently producing nothing. Kept `pub` and identically
+/// shaped so the CLI compiles everywhere and the failure is a runtime
+/// message, not a missing subcommand.
 #[cfg(not(target_os = "macos"))]
 pub fn run_metal(
     _spec: &KernelSpec,
