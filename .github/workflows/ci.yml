@@ -1,5 +1,6 @@
-# The main gate: fmt, clippy -D warnings, tests, cargo-deny, schema
-# validation — identical to `just ci` locally, on runners with NO GPU. That a
+# The main gate: fmt, clippy -D warnings, tests, rustdoc with warnings denied,
+# cargo-deny, schema validation, and the pin/version/skill consistency
+# scripts — identical to `just ci` locally, on runners with NO GPU. That a
 # plain runner stays green is itself the no-GPU path's regression test.
 name: ci
 

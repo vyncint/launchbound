@@ -19,7 +19,8 @@ runners.
 ```bash
 rustup show                # installs the pinned nightly from rust-toolchain.toml
 cargo install just         # or: brew install just
-just ci                    # fmt, clippy -D warnings, tests, cargo-deny, schemas
+just ci                    # fmt, clippy -D warnings, tests, rustdoc, cargo-deny,
+                           # schemas, pins, versions, skill
 ```
 
 `cargo reconverge check` also needs no GPU: it runs over Stable MIR as a

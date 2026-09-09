@@ -15,7 +15,7 @@ Measured 2026-08-20.
 | tier-1 guest | Apple `container` 1.2.0, **native arm64** Ubuntu 24.04 (no Docker, no Rosetta — operator requirement), CUDA toolkit 13.2 (sbsa), LLVM 21.1.8, container `cuda-oxide-dev` |
 | tier-2 box | AWS `g5.xlarge` spot @ **$0.364/hr**, us-east-2c, **NVIDIA A10G** (`sm_86`, cc 8.6), driver 595.71.05, CUDA 13.2 (V13.2.51), LLVM 21.1.8 — chosen over the T4 by the operator; barely above T4 spot ($0.335/hr) |
 | pinned toolchain | `nightly-2026-04-03` (`rustc 1.96.0-nightly (55e86c996 2026-04-02)`) |
-| reconverge | `cargo-reconverge 0.1.11` (built at `~/Projects/reconverge/target/release`) — **the version these measurements were taken with**; the gate now pins 0.3.0, which was verified to admit the identical set (see below) |
+| reconverge | `cargo-reconverge 0.1.11` (built at `~/Projects/reconverge/target/release`) — **the version these measurements were taken with**. The gate has since moved to 0.3.0, 0.4.0, 0.5.0 and (in 2.2.0) 0.6.0; each move was verified to admit the identical set — see the two comparison sections below. This row records the conditions of *these* measurements and is deliberately not updated. |
 | cuda-oxide | checkout `50d07314eb8b7d5ec821ba02b0048a753c20dd4e` — the tree synced to the box (the box AMI's own stale clone reports `e28248c1`, but `./gpu sync` replaces the working tree and excludes `.git`, so the synced tree is what compiled) |
 | subject kernels | `s0-reduce` (device-only lib crate, dep `cuda-device` only, containing the README's known-flip reduction); cuda-oxide examples `vecadd` (small) and `tiled_gemm` (large) |
 | evidence logs | `~/Projects/cuda-oxide/.gpu-evidence/20260820T{071248,071807,071959}Z.log` |
