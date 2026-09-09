@@ -71,6 +71,17 @@ gap is this product.
 **It is:** the autotuner for Rust GPU kernels that treats a
 convergence-unsafe configuration as disqualified rather than fast.
 
+**Not in scope: `#[launch_bounds]` and register budgeting are not
+validated.** `lb_max` is a tuning dimension in this corpus and `.maxntid` is
+emitted by cuda-oxide, but launchbound never reads a register count, so it
+cannot tell you a configuration will spill or fail to achieve its requested
+occupancy — and it does not check `#[launch_contract]` against grid limits
+either. The one `.maxntid` relationship the corpus does enforce
+(`block_x <= lb_max` in `stencil-1d`) holds because the kernel author wrote
+it as a constraint, not because launchbound knows what `.maxntid` means. A
+reader arriving from cuda-oxide's docs will assume otherwise; see
+[docs/LIMITATIONS.md](docs/LIMITATIONS.md#launch_bounds-and-registers-are-not-validated).
+
 ## The pipeline
 
 ```mermaid
@@ -197,7 +208,8 @@ The honest list lives in [docs/LIMITATIONS.md](docs/LIMITATIONS.md) — read
 it before trusting a result. Highlights: a clean gate is **not a proof of
 correctness** (reconverge's documented limits are inherited wholesale, and
 the launch-shape classifier recognizes the measured `warp_id()` family);
-the Metal path has **no gate at all**; model output is an estimate carrying
+the Metal path has **no gate at all**; `#[launch_bounds]` and register
+pressure are **not validated**; model output is an estimate carrying
 its measured per-kernel Spearman correlation (0.00–0.94 on this corpus,
 see model-calibration.toml); results are valid only for the recorded GPU,
 driver, and compiler and do not port between `sm_75` and `sm_86`; and

@@ -125,6 +125,43 @@ fn spawn(size: (u16, u16)) -> Terminal {
     spawn_in(fixture_run(), size)
 }
 
+/// `spawn_in` with extra environment. The base is still `env_clear`, so the
+/// only variables the child sees are the ones named here.
+fn spawn_in_with_env(run_dir: PathBuf, size: (u16, u16), env: &[(&str, &str)]) -> Terminal {
+    let mut builder = Terminal::builder()
+        .size(size.0, size.1)
+        .env_clear()
+        .timeout(TIMEOUT)
+        .arg(run_dir);
+    for (k, v) in env {
+        builder = builder.env(k, v);
+    }
+    let mut t = builder
+        .spawn(env!("CARGO_BIN_EXE_launchbound-tui"))
+        .expect("failed to spawn the TUI in a PTY");
+    t.wait_until(|s| s.to_string().contains("launchbound"))
+        .expect("first frame");
+    t
+}
+
+/// Every cell whose foreground or background is not the terminal default,
+/// as `row:col fg=.. bg=..`.
+fn coloured_cells(screen: &termlens::Screen) -> Vec<String> {
+    let mut out = Vec::new();
+    for row in 0..screen.rows() {
+        for col in 0..screen.cols() {
+            let Some(cell) = screen.cell(row, col) else {
+                continue;
+            };
+            let style = cell.style();
+            if style.fg != termlens::Color::Default || style.bg != termlens::Color::Default {
+                out.push(format!("{row}:{col} fg={:?} bg={:?}", style.fg, style.bg));
+            }
+        }
+    }
+    out
+}
+
 fn quit(mut t: Terminal, context: &str) {
     t.send(Key::Char('q')).expect("send q");
     let status = t.wait_exit().expect("TUI did not exit after q");
@@ -440,6 +477,117 @@ fn a_refusal_reason_survives_a_narrow_terminal_whole() {
 ///
 /// The fixture is `runs/reduce-stable-metal` copied verbatim into the crate
 /// (see `fixture`).
+/// **Nothing this TUI draws depends on colour**, in any view, so a reader on
+/// a monochrome terminal loses nothing.
+///
+/// #58 was filed expecting the opposite — that a colour-only cue would
+/// vanish under `NO_COLOR`. Measuring first says there is no such cue to
+/// lose: every style in `app.rs` is `Modifier::BOLD` or
+/// `BOLD | REVERSED`, and `Color::` appears nowhere in the crate. Bold and
+/// reverse are SGR attributes, not colour, and `NO_COLOR` does not ask
+/// anyone to drop them.
+///
+/// So this asserts the stronger and truer claim, structurally rather than by
+/// matching strings. It is the guard that matters: the day someone marks a
+/// refusal red, this fires and they have to add a cue that survives without
+/// it.
+#[test]
+fn no_view_of_the_tui_uses_colour() {
+    let mut t = spawn((80, 24));
+    t.wait_frame(ready).expect("the first complete frame");
+    // One predicate per instant, and body content rather than the footer:
+    // the help line names every view on every view.
+    for (key, view, marker) in [
+        (Key::Char('2'), "ranking", "ranking ("),
+        (Key::Char('3'), "rejections", "all refused configurations:"),
+        (Key::Char('4'), "progress", "measured 11 of"),
+        (Key::Char('1'), "overview", "the field, fastest first"),
+    ] {
+        t.send(key).expect("switch view");
+        let screen = t
+            .wait_frame(|s| s.to_string().contains(marker))
+            .unwrap_or_else(|e| panic!("{view}: waiting for the view body: {e}"));
+        let coloured = coloured_cells(&screen);
+        assert!(
+            coloured.is_empty(),
+            "{view}: {} cell(s) carry colour, which a NO_COLOR reader would lose; \
+             add a cue that survives without it (bold, reverse, or a glyph): {:?}",
+            coloured.len(),
+            &coloured[..coloured.len().min(8)]
+        );
+    }
+    quit(t, "no_view_of_the_tui_uses_colour");
+}
+
+/// The metal banner is the one cue #58 named, and the one most likely to be
+/// reached for with colour later. It carries its emphasis through
+/// `NO_COLOR=1` because the emphasis was never colour.
+#[test]
+fn the_metal_banner_keeps_its_emphasis_under_no_color() {
+    const BANNER: &str =
+        "NO convergence gate exists on the Metal path: the same bug class is NOT checked";
+
+    let mut t = spawn_in_with_env(fixture("run-metal"), (80, 24), &[("NO_COLOR", "1")]);
+    let frame = t.wait_frame(ready).expect("the first complete frame");
+
+    let at = frame
+        .find(BANNER)
+        .unwrap_or_else(|| panic!("the no-gate banner is missing under NO_COLOR:\n{frame}"));
+    assert_eq!(
+        at,
+        (1, 0),
+        "the banner is still the second line of the header"
+    );
+
+    // Every cell of it, exactly as the non-NO_COLOR test checks: an
+    // emphasis that survives halfway is the failure worth catching.
+    for col in 0..BANNER.chars().count() as u16 {
+        let style = frame
+            .cell(1, col)
+            .unwrap_or_else(|| panic!("cell (1, {col}) is off the grid"))
+            .style();
+        assert!(
+            style.bold && style.reverse,
+            "banner cell (1, {col}) {style:?} lost its emphasis under NO_COLOR \
+             — the notice can be read past:\n{frame}"
+        );
+    }
+    assert!(
+        coloured_cells(&frame).is_empty(),
+        "nothing is coloured under NO_COLOR either"
+    );
+    quit(t, "the_metal_banner_keeps_its_emphasis_under_no_color");
+}
+
+/// `NO_COLOR=1` produces a byte-identical frame, because there was no colour
+/// to suppress. If that ever stops being true, one of two things happened:
+/// colour was added (see `no_view_of_the_tui_uses_colour`), or the app grew
+/// a `NO_COLOR` branch that changes the layout — and a layout that depends
+/// on an environment variable needs its own golden, not this assertion.
+#[test]
+fn no_color_changes_not_one_cell() {
+    let mut plain = spawn_in_with_env(fixture_run(), (80, 24), &[]);
+    let a = plain
+        .wait_frame(ready)
+        .expect("a whole frame without NO_COLOR")
+        .with_styles()
+        .to_string();
+    quit(plain, "no_color_changes_not_one_cell (plain)");
+
+    let mut flagged = spawn_in_with_env(fixture_run(), (80, 24), &[("NO_COLOR", "1")]);
+    let b = flagged
+        .wait_frame(ready)
+        .expect("a whole frame with NO_COLOR")
+        .with_styles()
+        .to_string();
+    quit(flagged, "no_color_changes_not_one_cell (NO_COLOR)");
+
+    assert_eq!(
+        a, b,
+        "NO_COLOR changed the frame; it should have nothing to change"
+    );
+}
+
 #[test]
 fn the_metal_banner_is_bold_and_reversed_and_nothing_else_is() {
     const BANNER: &str =
