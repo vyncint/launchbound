@@ -90,7 +90,7 @@ jobs:
         run: |
           echo "release-type: $RELEASE_TYPE"
           cargo semver-checks --workspace \
-            --baseline-version 2.1.0 \
+            --baseline-version 2.2.0 \
             --release-type "$RELEASE_TYPE"
 
   # MSRV applies to the crates that do not need the pinned nightly
@@ -106,3 +106,33 @@ jobs:
         with:
           tool: just
       - run: just msrv
+
+  # One green check standing for every job in this workflow.
+  #
+  # `main`'s ruleset requires this rather than each job by name, so adding a
+  # job here protects `main` automatically instead of silently not being
+  # required until somebody remembers to edit the ruleset. That is the
+  # failure mode this exists to prevent: an unrequired gate is a gate that
+  # reports.
+  #
+  # `if: always()` plus an explicit scan, because `needs` alone would mark
+  # this skipped when a dependency fails — and a skipped required check does
+  # not block a merge. The three checks outside this workflow (`gate`,
+  # `check`, `termlens`) are required by name in the ruleset.
+  required-green:
+    name: required-green
+    if: always()
+    needs: [ci, semver, msrv]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every gate succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "gate results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "a required gate did not succeed" >&2
+              exit 1
+            fi
+          done

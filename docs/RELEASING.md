@@ -74,7 +74,9 @@ tag had to be pushed by hand.
   ```sh
   gh workflow run install.yml
   ```
-- **Move the semver baseline, in a PR of its own after the publish.**
+- **Move the semver baseline, in a PR of its own after the publish.** It is
+  the `--baseline-version` literal in `ci.yml`'s `semver` job, not a YAML
+  input — `grep baseline-version .github/workflows/ci.yml` finds it.
   `baseline-version` in `ci.yml`'s `semver` job is a literal. Left at the old
   release it compares every PR against a version nobody can install any more,
   and it would also carry this release's own breaks forward as if they were
@@ -83,7 +85,7 @@ tag had to be pushed by hand.
   bump the literal.
 
   ```sh
-  $EDITOR .github/workflows/ci.yml   # baseline-version: X.Y.Z
+  $EDITOR .github/workflows/ci.yml   # --baseline-version X.Y.Z
   ```
 - **A break needs the `breaking` label on its PR**, which switches the semver
   job from `patch` to `major`. Without it the job fails, which is the point;
