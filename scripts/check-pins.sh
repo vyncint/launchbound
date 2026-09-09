@@ -85,6 +85,12 @@ toolchain_sites() {
   # matches nothing is the same failure as a stale pin, one level up.
   site "action/action.yml" \
     "$(sed -n '/^  toolchain:/,/^  [a-z]/s/^    default: "\{0,1\}\(nightly-[0-9-]*\)"\{0,1\}.*/\1/p' action/action.yml)"
+  # The README badge. It was not a site until 2.2.0, and it drifted exactly
+  # as an unchecked site does: the badge still advertised nightly-2026-04-03
+  # after the pin had moved, which is the first pin a reader sees. shields.io
+  # escapes a literal hyphen as `--`, so unescape before comparing.
+  site "README.md" \
+    "$(sed -n 's|.*/badge/toolchain-\(nightly[0-9-]*\)-orange.*|\1|p' README.md | sed 's/--/-/g')"
 }
 
 # Read `<file><TAB><value>` lines on stdin; every value must match.

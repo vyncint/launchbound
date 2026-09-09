@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: NVlabs/cuda-oxide
-          ref: 50d07314eb8b7d5ec821ba02b0048a753c20dd4e
+          ref: 26754ae52c26c097dc1c465a1e42c4c5d05a3d40
           path: cuda-oxide
 
       - name: Safety gate
@@ -63,8 +63,8 @@ the gate specializes per candidate.
 | `cc` | — | target compute capability, e.g. `"8.6"` (required; verdicts do not transfer across parts) |
 | `fail-on` | `tool-error` | `never`, `refused`, or `tool-error` |
 | `version` | `latest` | launchbound-cli release to install |
-| `reconverge-version` | `0.5.0` | reconverge release from crates.io — moves in lockstep with `toolchain` |
-| `toolchain` | `nightly-2026-04-03` | the nightly that built that reconverge |
+| `reconverge-version` | `0.6.0` | reconverge release from crates.io — moves in lockstep with `toolchain` |
+| `toolchain` | `nightly-2026-08-28` | the nightly that built that reconverge |
 | `summary` | `"true"` | write the verdict table to the job summary |
 
 ## Outputs

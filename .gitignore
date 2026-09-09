@@ -4,3 +4,8 @@ target/
 # Staged bench plans and box session outputs are artifacts, not source.
 /plans/
 /bench-session/
+# `cargo oxide inspect` writes its lowering beside the kernel it lowered, so
+# the command corpus/README.md tells a reader to run leaves the tree dirty.
+# These are build outputs; the PTX that matters is recorded, not committed.
+corpus/*/*.ptx
+corpus/*/*.ll

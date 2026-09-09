@@ -4,9 +4,9 @@
 # together or not at all; a bump is its own commit with its own gate re-run.
 #
 # Current lockstep set:
-#   nightly     nightly-2026-04-03
-#   cuda-oxide  50d07314eb8b7d5ec821ba02b0048a753c20dd4e
-#   reconverge  v0.5.0
+#   nightly     nightly-2026-08-28
+#   cuda-oxide  26754ae52c26c097dc1c465a1e42c4c5d05a3d40
+#   reconverge  v0.6.0
 [toolchain]
-channel = "nightly-2026-04-03"
+channel = "nightly-2026-08-28"
 components = ["rustfmt", "clippy"]

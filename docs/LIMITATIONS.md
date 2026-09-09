@@ -2,11 +2,13 @@
 
 A tool that overstates its reach is worse than one that does less. These are
 launchbound's, with numbers where we have them. Everything here was true on
-2026-08-22 against the pins in rust-toolchain.toml and CONTRIBUTING.md.
+2026-08-22 against the pins in rust-toolchain.toml and CONTRIBUTING.md; the
+pin-dependent claims were re-checked on 2026-09-09 against 2.2.0's lockstep
+set, and the corpus decided identically ([research-baseline](research-baseline.md)).
 
 ## The gate inherits reconverge's limits, wholesale
 
-A clean gate is **not a proof of correctness**. `reconverge` (v0.5.0) is
+A clean gate is **not a proof of correctness**. `reconverge` (v0.6.0) is
 summary-based and interprocedural, handles reducible control flow only,
 cannot evaluate non-literal masks, and puts data races entirely out of
 scope. Its own documentation is the authority; launchbound adds no analysis
@@ -105,8 +107,12 @@ a T4.
 ## cuda-oxide is alpha
 
 Its README says to expect bugs, incomplete features, and API breakage. The
-pins (CONTRIBUTING.md) move together or not at all; both upstreams had already
-moved past the pinned versions on the day this was written. cuda-oxide
+pins (CONTRIBUTING.md) move together or not at all. 2.2.0's bump put the
+cuda-oxide pin *at* upstream `main` (`26754ae5`) rather than behind it, which
+is a fact with a shelf life measured in days — `pins.yml` reports the drift
+every Monday, and names a toolchain move separately from commit churn. The
+previous set had gone 133 commits and one nightly stale precisely because that
+watch only ran when somebody dispatched it. cuda-oxide
 emits `.target sm_80` PTX for this corpus, so `needs_cc = "8.0"` across the
 board and nothing here runs on pre-Ampere parts. `cargo check` under the
 reconverge driver does not evaluate all codegen-time consts (an invalid

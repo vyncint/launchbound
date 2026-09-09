@@ -34,5 +34,5 @@ Every kernel is a **standalone, device-only lib crate**:
 
 ```bash
 git clone https://github.com/NVlabs/cuda-oxide ../cuda-oxide   # sibling of this repo
-git -C ../cuda-oxide checkout 50d07314                          # the pinned commit
+git -C ../cuda-oxide checkout 26754ae5                          # the pinned commit
 ```
