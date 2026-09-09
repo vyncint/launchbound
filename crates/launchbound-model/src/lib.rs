@@ -12,7 +12,10 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ModelError {
-    #[error("unknown compute capability {0:?} — the model has no device table for it")]
+    // The known list is computed in the message, not carried in a second
+    // field: adding a field to a public enum variant is a breaking change,
+    // and 2.2.0 is a minor bump.
+    #[error("unknown compute capability {cc:?} — the model has no device table for it; known: {known}", cc = .0, known = known_capabilities())]
     UnknownCc(String),
     #[error("kernel.toml [model]: {0}")]
     Spec(String),
@@ -20,31 +23,75 @@ pub enum ModelError {
     Space(#[from] launchbound_space::SpaceError),
 }
 
-/// Per-SM limits by compute capability. Only the parts this project has
-/// measured on are listed; an unknown cc is an error, never a guess.
+/// Per-SM limits by compute capability.
+///
+/// Every field but `sm_count` is a **compute-capability fact**, taken from
+/// the CUDA C++ Programming Guide's "Technical Specifications per Compute
+/// Capability" table. `sm_count` is a **product fact** — two parts at the
+/// same capability differ — so each entry names the part its count came from.
+///
+/// An unknown cc is an error, never a guess: a fabricated capacity would
+/// produce an occupancy number, and an occupancy number is exactly the sort
+/// of thing a reader believes.
 #[derive(Debug, Clone, Copy)]
 pub struct DeviceParams {
     pub cc: &'static str,
+    /// Streaming multiprocessors on the named part. Not a capability fact.
+    ///
+    /// Ranking within one kernel's space is barely sensitive to it: it enters
+    /// only through `waves = grid / (blocks_per_sm * sm_count)`, a constant
+    /// divisor that scales every candidate's cost alike, and it changes an
+    /// ordering only where the `.max(1.0)` clamp on waves bites. It matters
+    /// for reading `waves` as a number, not for choosing between candidates.
     pub sm_count: u32,
     pub max_threads_per_sm: u32,
     pub max_warps_per_sm: u32,
     pub max_blocks_per_sm: u32,
+    /// Statically allocatable shared memory per block, without the dynamic
+    /// opt-in. 48 KiB on every architecture here — deliberately flat.
     pub smem_per_block_default: u64,
+    /// Shared memory per SM. Note this is the *per-SM* capacity, one KiB
+    /// above the per-block opt-in maximum on Ampere and later, where the
+    /// driver reserves 1 KiB.
     pub smem_per_sm: u64,
 }
 
+/// Ascending by compute capability. A test enforces both the order and the
+/// internal consistency of every row.
+///
+/// # Why this is not shared with reconverge
+///
+/// reconverge's `cc.rs` carries a capability table too, and #52 asked whether
+/// a shared `simt-device-table` crate should own both. The answer for 2.2.0
+/// is no, for three reasons:
+///
+/// 1. **They answer different questions.** reconverge needs
+///    `max_per_block` — the dynamic opt-in ceiling — because RC004 asks
+///    "could this allocation ever load". This needs per-SM occupancy
+///    capacity: threads, warps, blocks and shared memory *per SM*. Only
+///    shared memory overlaps at all, and even there the numbers differ by
+///    the 1 KiB the driver reserves on Ampere and later.
+/// 2. **It would be a third pin.** A shared crate joins the lockstep set,
+///    in a project whose headline 2.2.0 issue was that the pin set went 133
+///    commits stale. Adding a pin to reduce duplication of eleven numbers is
+///    a poor trade.
+/// 3. **The drift is checkable without it.** The overlapping figures were
+///    cross-checked by hand against reconverge 0.6.0's table when these rows
+///    were written, and they agree exactly, per-SM minus the reserved KiB:
+///
+///    | cc | reconverge `max_per_block` | here `smem_per_sm` |
+///    |---|---|---|
+///    | 7.5 | 64 KiB | 64 KiB (no reservation pre-Ampere) |
+///    | 8.0 | 163 KiB | 164 KiB |
+///    | 8.6 | 99 KiB | 100 KiB |
+///    | 8.9 | 99 KiB | 100 KiB |
+///    | 9.0 | 227 KiB | 228 KiB |
+///    | 10.0 | 227 KiB | 228 KiB |
+///
+/// Revisit if a third consumer appears, or if the two tables are ever found
+/// to disagree — that would be the evidence this reasoning is wrong.
 pub const DEVICES: &[DeviceParams] = &[
-    // NVIDIA A10G (GA102, cc 8.6)
-    DeviceParams {
-        cc: "8.6",
-        sm_count: 80,
-        max_threads_per_sm: 1536,
-        max_warps_per_sm: 48,
-        max_blocks_per_sm: 16,
-        smem_per_block_default: 49_152,
-        smem_per_sm: 102_400,
-    },
-    // NVIDIA T4 (TU104, cc 7.5)
+    // NVIDIA T4 (TU104, cc 7.5) — 40 SMs.
     DeviceParams {
         cc: "7.5",
         sm_count: 40,
@@ -52,9 +99,67 @@ pub const DEVICES: &[DeviceParams] = &[
         max_warps_per_sm: 32,
         max_blocks_per_sm: 16,
         smem_per_block_default: 49_152,
-        smem_per_sm: 65_536,
+        smem_per_sm: 65_536, // 64 KiB
+    },
+    // NVIDIA A100 (GA100, cc 8.0) — 108 SMs on the 40 GB and 80 GB parts.
+    DeviceParams {
+        cc: "8.0",
+        sm_count: 108,
+        max_threads_per_sm: 2048,
+        max_warps_per_sm: 64,
+        max_blocks_per_sm: 32,
+        smem_per_block_default: 49_152,
+        smem_per_sm: 167_936, // 164 KiB
+    },
+    // NVIDIA A10G (GA102, cc 8.6) — 80 SMs.
+    DeviceParams {
+        cc: "8.6",
+        sm_count: 80,
+        max_threads_per_sm: 1536,
+        max_warps_per_sm: 48,
+        max_blocks_per_sm: 16,
+        smem_per_block_default: 49_152,
+        smem_per_sm: 102_400, // 100 KiB
+    },
+    // NVIDIA L4 (AD104, cc 8.9) — 58 SMs. The L40 is the same capability
+    // with 142; pass the one you are running on.
+    DeviceParams {
+        cc: "8.9",
+        sm_count: 58,
+        max_threads_per_sm: 1536,
+        max_warps_per_sm: 48,
+        max_blocks_per_sm: 24,
+        smem_per_block_default: 49_152,
+        smem_per_sm: 102_400, // 100 KiB
+    },
+    // NVIDIA H100 SXM5 (GH100, cc 9.0) — 132 SMs. The PCIe part has 114.
+    DeviceParams {
+        cc: "9.0",
+        sm_count: 132,
+        max_threads_per_sm: 2048,
+        max_warps_per_sm: 64,
+        max_blocks_per_sm: 32,
+        smem_per_block_default: 49_152,
+        smem_per_sm: 233_472, // 228 KiB
+    },
+    // NVIDIA B200 (GB100, cc 10.0) — 148 SMs.
+    DeviceParams {
+        cc: "10.0",
+        sm_count: 148,
+        max_threads_per_sm: 2048,
+        max_warps_per_sm: 64,
+        max_blocks_per_sm: 32,
+        smem_per_block_default: 49_152,
+        smem_per_sm: 233_472, // 228 KiB
     },
 ];
+
+/// `("8.6")` -> `(8, 6)`, for ordering and range checks. Returns `None` for
+/// anything that is not `<int>.<int>`.
+fn cc_parts(cc: &str) -> Option<(u32, u32)> {
+    let (major, minor) = cc.split_once('.')?;
+    Some((major.parse().ok()?, minor.parse().ok()?))
+}
 
 pub fn device(cc: &str) -> Result<DeviceParams, ModelError> {
     DEVICES
@@ -62,6 +167,19 @@ pub fn device(cc: &str) -> Result<DeviceParams, ModelError> {
         .find(|d| d.cc == cc)
         .copied()
         .ok_or_else(|| ModelError::UnknownCc(cc.to_string()))
+}
+
+/// The capabilities `device` will accept, ascending, for error messages.
+///
+/// Worth saying out loud rather than leaving the reader to guess: the gate
+/// (reconverge) knows more capabilities than the model does, so `prune --cc`
+/// can succeed at a value `tune --backend model --cc` refuses. That gap is
+/// real and narrower than it was, and the message is where a reader meets it.
+#[must_use]
+pub fn known_capabilities() -> String {
+    let mut ccs: Vec<&str> = DEVICES.iter().map(|d| d.cc).collect();
+    ccs.sort_by_key(|cc| cc_parts(cc));
+    ccs.join(", ")
 }
 
 /// One candidate's estimate. `cost` is a unitless relative score within a
@@ -268,13 +386,134 @@ mod tests {
         );
     }
 
+    /// The two capabilities the issue names, which used to be model errors.
+    #[test]
+    fn hopper_and_blackwell_are_in_the_table() {
+        let h = device("9.0").expect("cc 9.0 (Hopper) must be known");
+        assert_eq!(h.max_threads_per_sm, 2048);
+        assert_eq!(h.max_warps_per_sm, 64);
+        assert_eq!(h.max_blocks_per_sm, 32);
+        assert_eq!(h.smem_per_sm, 228 * 1024);
+
+        let b = device("10.0").expect("cc 10.0 (Blackwell) must be known");
+        assert_eq!(b.max_threads_per_sm, 2048);
+        assert_eq!(b.smem_per_sm, 228 * 1024);
+    }
+
+    /// Ordering and internal consistency of every row, so a future entry
+    /// cannot be pasted in with a transposed digit and go unnoticed. These
+    /// are the CUDA Programming Guide's documented ranges, not opinions.
+    #[test]
+    fn every_device_row_is_ordered_and_within_the_documented_ranges() {
+        let mut previous: Option<(u32, u32)> = None;
+        for d in DEVICES {
+            let parts = cc_parts(d.cc).unwrap_or_else(|| panic!("cc {:?} does not parse", d.cc));
+
+            // Ascending, and numerically: "10.0" sorts before "8.6" as a
+            // string, which is exactly the trap a naive check falls into.
+            if let Some(prev) = previous {
+                assert!(
+                    parts > prev,
+                    "DEVICES must ascend by capability: {parts:?} follows {prev:?}"
+                );
+            }
+            previous = Some(parts);
+
+            // A warp is 32 threads on every NVIDIA part that has ever
+            // shipped; the two limits are the same fact twice.
+            assert_eq!(
+                d.max_warps_per_sm * 32,
+                d.max_threads_per_sm,
+                "cc {}: {} warps x 32 != {} threads",
+                d.cc,
+                d.max_warps_per_sm,
+                d.max_threads_per_sm
+            );
+
+            assert!(
+                (1024..=2048).contains(&d.max_threads_per_sm),
+                "cc {}: threads/SM {} outside the documented 1024..=2048",
+                d.cc,
+                d.max_threads_per_sm
+            );
+            assert!(
+                (8..=32).contains(&d.max_blocks_per_sm),
+                "cc {}: blocks/SM {} outside the documented 8..=32",
+                d.cc,
+                d.max_blocks_per_sm
+            );
+
+            // Static shared memory is capped at 48 KiB per block on every
+            // architecture listed; anything above it needs the dynamic
+            // opt-in, which is a launch-time decision this model does not
+            // make. Flat, deliberately.
+            assert_eq!(
+                d.smem_per_block_default,
+                48 * 1024,
+                "cc {}: the static per-block cap is 48 KiB everywhere",
+                d.cc
+            );
+            assert!(
+                d.smem_per_sm >= d.smem_per_block_default,
+                "cc {}: an SM cannot hold less than one block's worth",
+                d.cc
+            );
+            assert!(
+                d.smem_per_sm <= 228 * 1024,
+                "cc {}: smem/SM {} above the largest documented capacity",
+                d.cc,
+                d.smem_per_sm
+            );
+
+            assert!(d.sm_count > 0, "cc {}: sm_count is a real part", d.cc);
+        }
+    }
+
+    /// Every row is reachable by the name it carries, and no capability is
+    /// listed twice — a duplicate would shadow silently, since `device`
+    /// takes the first match.
+    #[test]
+    fn every_row_is_reachable_and_unique() {
+        let mut seen = std::collections::BTreeSet::new();
+        for d in DEVICES {
+            assert!(seen.insert(d.cc), "cc {} appears twice", d.cc);
+            let found = device(d.cc).expect("a listed cc resolves");
+            assert_eq!(found.cc, d.cc);
+            assert_eq!(found.sm_count, d.sm_count);
+        }
+        assert_eq!(seen.len(), DEVICES.len());
+    }
+
+    /// The unknown-cc error names what would have worked. A reader who
+    /// mistypes `8.60` should not have to read the source to find `8.6`.
+    #[test]
+    fn an_unknown_capability_lists_the_known_ones() {
+        let err = device("11.5").expect_err("11.5 is not in the table");
+        let msg = err.to_string();
+        for cc in ["7.5", "8.0", "8.6", "8.9", "9.0", "10.0"] {
+            assert!(msg.contains(cc), "message must name {cc}: {msg}");
+        }
+        // Ascending numerically, so 10.0 comes last rather than after 8.6.
+        assert!(
+            msg.find("9.0").unwrap() < msg.find("10.0").unwrap(),
+            "known list must ascend numerically: {msg}"
+        );
+    }
+
     #[test]
     fn device_table_is_closed() {
         assert!(device("8.6").is_ok());
         assert!(device("7.5").is_ok());
+        // This used to assert on 9.0, which 2.2.0 added — the example moved,
+        // the rule did not. Pascal is deliberately out of scope (no corpus
+        // kernel targets it and nothing here has run on one), and 99.9 is
+        // not a capability at all.
         assert!(
-            device("9.0").is_err(),
-            "an unknown cc is an error, never a guess"
+            device("6.1").is_err(),
+            "an untabulated cc is an error, never a guess"
         );
+        assert!(device("99.9").is_err());
+        // Nor is a well-formed prefix of a known one: "8" is not "8.0".
+        assert!(device("8").is_err());
     }
 }
