@@ -19,7 +19,8 @@ is the full contributor document and wins wherever the two disagree.
 ## Build and test
 
 ```sh
-just ci                       # fmt, clippy, test, deny, schemas, pins
+just ci                       # fmt, clippy, test, docs, deny, schemas, pins,
+                              # versions, skill
 cargo test --workspace        # no GPU, no network, no checkout needed
 just pins                     # the recorded pin sites agree — no network
 just gate                     # the gate tests — needs cargo-reconverge + cuda-oxide

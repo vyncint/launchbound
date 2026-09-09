@@ -86,11 +86,11 @@ reader arriving from cuda-oxide's docs will assume otherwise; see
 
 ```mermaid
 flowchart LR
-    A[enumerate] --> B["PRUNE\n(reconverge, MIR — no GPU)"]
-    B --> C["compile\n(cuda-oxide → PTX)"]
+    A[enumerate] --> B["PRUNE<br/>reconverge · MIR · no GPU"]
+    B --> C["compile<br/>cuda-oxide → PTX"]
     C --> D[benchmark]
     D --> E[rank]
-    B -. "disqualified configs\n+ rule ID + source span" .-> F[rejection report]
+    B -. "disqualified configs<br/>+ rule ID + source span" .-> F[rejection report]
     D -. "faster but refused" .-> F
 ```
 
@@ -140,9 +140,14 @@ Two asymmetries, published rather than buried:
 ## CLI
 
 ```
-launchbound space  <kernel> [--json]                  # enumerate the space, print its size
+launchbound space  <kernel> [--json] [--list]         # enumerate the space, print its size
 launchbound prune  <kernel> --cc 8.6 [--json]         # reconverge pass only — NO GPU NEEDED
-launchbound model  <kernel> --cc 8.6                  # analytical ranking — NOT GATED
+launchbound model  <kernel> --cc 8.6 [--results R]    # analytical ranking — NOT GATED;
+                                                      # --results prints Spearman vs measured
+launchbound stage  <kernel> --cc 8.6 [--allow-unsafe --reason "…"]
+                                                      # prune + compile every admitted
+                                                      # specialization, emit a bench plan
+                                                      # directory to ship to a GPU box
 launchbound tune   <kernel> --cc 8.6 --backend cuda|metal|model [--budget 30m]
 launchbound report <run> [--json] [--rejected]        # includes refused-but-faster configs
 launchbound apply  <run> [--no-verify]                # emit the cuda-oxide policy specialization
@@ -174,8 +179,13 @@ re-verify against — and the output carries a notice saying so.
 
 Exit codes: `0` a safe configuration was found; `1` the fastest candidates
 were refused and the chosen one is slower than a rejected candidate — notable,
-not an error; `2` tool error. `--allow-unsafe` exists, requires an explicit
-reason string recorded in the report, and is never the default.
+not an error; `2` tool error.
+
+`--allow-unsafe` is **on `stage`, not on `tune`**: measuring a configuration
+the gate refused is a deliberate act with its own command, and it requires
+`--reason` with a non-empty string, recorded verbatim in the report. A
+missing reason is a usage error, not a warning. It is never the default, and
+`tune` has no such flag.
 
 `prune` needing no GPU is the reason it exists as its own verb: it is the only
 part of the pipeline a developer on a laptop can run, and it is the part that

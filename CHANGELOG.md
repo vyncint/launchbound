@@ -9,7 +9,66 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-09
+
+The cuda-oxide pin was 133 commits and one toolchain behind, and the watch
+that would have said so had its schedule commented out. 2.2.0 catches up,
+turns the watch back on, widens the device model past Ampere, and closes the
+panic and arithmetic gaps user input could reach — plus the semver and
+documentation gates a published 2.x line should have had from the start.
+
+Ten issues (#50–#59). **Four of them were wrong when filed**, and measuring
+before implementing caught each one; the corrections are recorded on the
+issues and repeated below, because an audit that miscounts is worth less
+than no audit and the shape of the miscount is the useful part.
+
 ### Changed
+
+- **The lockstep pins move to the current upstream**, at every recorded
+  site: `nightly-2026-04-03` → **`nightly-2026-08-28`**, cuda-oxide
+  `50d07314` → **`26754ae5`** (upstream `main` on the day), reconverge
+  `0.5.0` → **`0.6.0`**. The prune leg never needed this — it is analysis
+  only, which is why the staleness stayed invisible — but the compile leg
+  shells out to `cargo oxide inspect` from the checkout the pin names, so a
+  kernel written against a current `cuda-device` could not be built by the
+  gate at all.
+
+  Verified rather than assumed: the corpus ran under both pin sets and the
+  outputs were diffed **byte for byte** — 93 clean, 8 refused, the same
+  eight `REFUSED RC001` lines on `reduce-flip` above one warp, the same
+  candidate hashes. All six corpus kernels lower to PTX at the new pin
+  (`.target sm_80`, one `.visible .entry` each). Recorded in
+  `docs/research-baseline.md` in the shape the 0.1.11 → 0.3.0 comparison
+  established. (#50)
+
+- **The README toolchain badge is a checked pin site.** It was not one, and
+  it had drifted to a nightly nothing installed — the first pin a reader
+  sees. `check-pins.sh` reports three nightly sites now and fails on badge
+  drift, which was verified by drifting it on purpose. (#50)
+
+- **The device model reaches Blackwell.** `DEVICES` held two rows, A10G
+  (8.6) and T4 (7.5), so `--cc 9.0` on a Hopper part — the architecture a
+  reader arriving from cuda-oxide is most likely to be holding — was a model
+  error. Added 8.0 (A100), 8.9 (L4/L40), 9.0 (H100) and 10.0 (B200).
+
+  Every field but `sm_count` is a compute-capability fact from the CUDA C++
+  Programming Guide; `sm_count` is a product fact and each row names the
+  part it came from. The new rows' shared-memory figures were cross-checked
+  against reconverge 0.6.0's independent `cc.rs` table and agree exactly,
+  allowing for the 1 KiB the driver reserves per SM on Ampere and later. An
+  unknown capability now lists the known ones, sorted numerically — `"10.0"`
+  precedes `"8.6"` as a string, which is the trap. (#52)
+
+- **`launchbound_bench::Summary` is re-exported from `launchbound-report`.**
+  It appears in the public fields of `CandidateReport`, `ChosenInfo` and
+  `RejectedFaster`, so it was reachable and unnameable unless you also
+  depended on the bench crate. (#55)
+
+- **`launchbound-space` refuses an impossible block at load.** A block axis
+  above CUDA's per-axis limit (x, y: 1024; z: 64) is now rejected by
+  `KernelSpec` with a message naming the value and the limit, so an operator
+  hears about a typo when the spec loads rather than as a launch failure ten
+  minutes into a sweep. (#53)
 
 - **The PTY test harness moves to termlens 0.10.1** (from 0.9). The upgrade
   itself is small — `drag` takes four column-first arguments now instead of
@@ -37,6 +96,126 @@ change measured timings are marked `bench:`.
 - **CI writes `TERMLENS_ARTIFACT_DIR` and renders failures into the job
   summary** via termlens's `report` action, so a red PTY test arrives as a
   picture rather than a grid in a log.
+
+### Fixed
+
+- **Six `partial_cmp(..).expect("no NaN")` sorts became `f64::total_cmp`.**
+  The issue said five; there are seven `partial_cmp` sites and six carried
+  an `expect`, because the audit grepped the *message string* rather than
+  the construct and the two with different message text fell out of the
+  count. Those two were the ones that mattered: `bench/stats.rs` sorts the
+  **raw measured timings**, and `model/lib.rs` sits under **`spearman`, a
+  `pub fn`** — so `spearman(&xs, &ys)` with a single NaN in either column
+  aborted the process from safe code, with no unsafe input path required.
+  That is a reachable panic, not a latent one.
+
+  `total_cmp` is total, free, and identical to `partial_cmp` on every pair
+  of non-NaN floats. NaN ordering is documented where it changes an outcome.
+  In `summarize` it has a consequence worth stating: a NaN fails both Tukey
+  fence comparisons and is **rejected as an outlier**; poison the quantiles
+  badly enough and the answer is `None`, the honest summary of a sample that
+  has none. (#54)
+
+- **`Config::block_threads()` saturates instead of overflowing.** It was
+  `.product()` over three `u64`s read straight from `kernel.toml`: a panic
+  in a debug build, a wrapped value in release — and a wrapped value does
+  not stop there, it feeds `estimate` and the gate's `threads > WARP_SIZE`
+  test, so a block of 2^64 + 32 threads reads as a legal 32-thread block.
+
+  The issue proposed `checked_mul` folding to `Result`, which is a break to
+  a `pub fn` on a crate published at 2.1.0 and could not ship in a minor
+  bump. It was also unnecessary, and the issue said why without noticing:
+  `grid_blocks` is the sibling doing the same job with `saturating_mul`.
+  A proptest over three arbitrary `u64` axes holds the line. (#53)
+
+- **The summary invariant lives in the type.** `measured_fastest_first`
+  filtered on `summary.is_some()` and returned bare candidates, so both
+  callers re-`unwrap()`ed on the strength of a filter performed in another
+  function. It returns `(&CandidateReport, &Summary)` pairs; the four
+  unwraps are gone because they no longer compile. Same shape in
+  `report::build`. Remaining `expect`s in functions that already return
+  `Result` became `?`. (#55)
+
+### Added
+
+- **A semver gate, with the release type forced.** No workflow ran
+  `cargo-semver-checks`, so removing a `pub fn` shipped without a signal.
+  The gate forces `--release-type patch` and the reason is measured, not
+  assumed: remove `Config::kernel` while bumping the manifest to 3.0.0 in
+  the same PR and the *inferred* run prints `0 checks: 0 pass, 254 skip` and
+  exits **0**, while forced `patch` prints `1 major and 0 minor checks
+  failed` and exits **100**. cargo-semver-checks runs only the lints the
+  declared bump does not already excuse, so a PR that declares its own break
+  silences the gate. `patch` excuses nothing — and does not forbid
+  additions, since only breaking changes are reported.
+
+  A deliberate break carries the new `breaking` label, which switches the
+  job to `major`. Three of the eleven published crates are binary-only; the
+  eight with a library API are all covered. (#56)
+
+- **`scripts/check-versions.sh`, in `just ci`.** `[workspace.dependencies]`
+  pinned the path crates at 2.0.0 while the workspace was 2.1.0 — harmless
+  for a path build, which is why it survived a whole minor line. Not
+  harmless for the next major: with the pins stale, bumping to 3.0.0 makes
+  `cargo metadata` refuse to resolve the workspace at all. **The drift
+  breaks the release after next.** (#56)
+
+- **A rustdoc gate, and 237 documented public items.** The issue said "about
+  42". It is 237 — I counted items and never counted *fields*, and 144 of
+  the 237 are public struct fields. In a crate family whose structs are the
+  JSON wire formats, the fields are the part a consumer actually reads.
+
+  The gate cost nothing to turn on (`cargo doc` was already at zero
+  warnings) and earned its keep immediately by failing on two broken
+  intra-doc links in the commit that added it — one naming a function that
+  does not exist. (#57)
+
+- **The pin watch runs weekly again, and reports a toolchain move on its own
+  line.** The schedule had been commented out, so it spoke only when
+  dispatched. The two kinds of drift are not alike: commit churn is a bump
+  you can schedule, a channel move means our rustc can no longer build
+  upstream's kernels and reconverge must be rebuilt. An extractor that reads
+  nothing now fails the job instead of reporting "Pins current." forever.
+  Exercised against a stubbed upstream across five scenarios. (#51)
+
+- **The TUI's freedom from colour is now an invariant.** #58 expected a
+  colour-only cue to vanish under `NO_COLOR`; measuring found there is no
+  such cue — every style is `BOLD` or `BOLD | REVERSED` and `Color::`
+  appears nowhere. So the tests assert the stronger claim: every cell of all
+  four views has the terminal's default foreground and background, the metal
+  banner keeps its emphasis under `NO_COLOR=1`, and a `NO_COLOR` frame is
+  byte-identical to one without it. The first fires the day someone marks a
+  refusal red. (#58)
+
+  (The issue's other half — "the suite runs at one geometry" — was already
+  false when filed: 2.1.0's suite runs nine tests at 80×24 and two at 60×30.)
+
+### Documentation
+
+- **`#[launch_bounds]` and register budgeting are not validated**, and the
+  README and LIMITATIONS now say so and link to each other. launchbound
+  never reads a register count and does not check `#[launch_contract]`
+  against grid limits. The confusion is earned: `stencil-1d/kernel.toml`
+  opens by narrating register pressure, `lb_max` is a real tuning dimension,
+  and the tool is called *launchbound*. The one `.maxntid` relationship the
+  corpus enforces holds because the kernel author wrote it as a constraint —
+  launchbound attaches no meaning to `lb_max`. (#59)
+
+- **The model's device table is narrower than the gate's**, recorded in
+  LIMITATIONS: reconverge covers 7.0–12.0, so `prune --cc 12.0` can succeed
+  where `tune --backend model --cc 12.0` refuses. Only 8.6 and 7.5 have ever
+  had a kernel measured on them here; the other four rows are documented
+  capacity, not experience.
+
+- **Four false claims found by a deep read before the release.**
+  `--allow-unsafe` was documented as if it were on `tune`; it is on `stage`,
+  and `tune --allow-unsafe` is an "unexpected argument" error. The README's
+  CLI block omitted `stage` entirely. `just ci` was described with a
+  two-release-stale recipe list in three separate places. And
+  research-baseline said "the gate now pins 0.3.0" in the present tense.
+
+- `docs/RELEASING.md` gains the internal pin bump in step 1 and the
+  post-publish `baseline-version` move as its own step.
 
 ## [2.1.0] - 2026-09-05
 
