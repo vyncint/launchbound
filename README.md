@@ -1,9 +1,9 @@
 # launchbound
 
-[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](LICENSE-MIT)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](https://github.com/vyncint/launchbound/blob/main/LICENSE-MIT)
 [![crates.io](https://img.shields.io/crates/v/launchbound-cli?label=crates.io&color=orange)](https://crates.io/crates/launchbound-cli)
-[![toolchain](https://img.shields.io/badge/toolchain-nightly--2026--08--28-orange)](rust-toolchain.toml)
-[![GPU](https://img.shields.io/badge/GPU-not%20required-brightgreen)](docs/ARCHITECTURE.md)
+[![toolchain](https://img.shields.io/badge/toolchain-nightly--2026--08--28-orange)](https://github.com/vyncint/launchbound/blob/main/rust-toolchain.toml)
+[![GPU](https://img.shields.io/badge/GPU-not%20required-brightgreen)](https://github.com/vyncint/launchbound/blob/main/docs/ARCHITECTURE.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/vyncint/launchbound/ci.yml?label=CI)](https://github.com/vyncint/launchbound/actions/workflows/ci.yml)
 
 A convergence-safe autotuner for Rust GPU kernels.
@@ -15,7 +15,7 @@ NVIDIA it measures on real silicon. On Apple Silicon it measures on Metal.
 With no GPU at all it falls back to an analytical model — and says so.
 
 > Every design gate shipped with a measured result; the honest edges live
-> in [docs/LIMITATIONS.md](docs/LIMITATIONS.md). Read that before trusting
+> in [docs/LIMITATIONS.md](https://github.com/vyncint/launchbound/blob/main/docs/LIMITATIONS.md). Read that before trusting
 > a result.
 
 ## Why this tool exists
@@ -80,7 +80,7 @@ either. The one `.maxntid` relationship the corpus does enforce
 (`block_x <= lb_max` in `stencil-1d`) holds because the kernel author wrote
 it as a constraint, not because launchbound knows what `.maxntid` means. A
 reader arriving from cuda-oxide's docs will assume otherwise; see
-[docs/LIMITATIONS.md](docs/LIMITATIONS.md#launch_bounds-and-registers-are-not-validated).
+[docs/LIMITATIONS.md](https://github.com/vyncint/launchbound/blob/main/docs/LIMITATIONS.md#launch_bounds-and-registers-are-not-validated).
 
 ## The pipeline
 
@@ -113,7 +113,7 @@ For each candidate configuration at its own launch shape, `launchbound` runs
 
 A `reconverge` tool error (exit 2) is a hard stop for that candidate, never a
 pass by omission. The full rule, including why `--strict` is mandatory, lives
-in [docs/SAFETY.md](docs/SAFETY.md) — that document is the product. A rejected
+in [docs/SAFETY.md](https://github.com/vyncint/launchbound/blob/main/docs/SAFETY.md) — that document is the product. A rejected
 configuration is a feature, not a failure: the headline output includes every
 configuration that was *faster and refused*, with the rule ID and source span.
 
@@ -166,7 +166,7 @@ shape make a barrier or a collective non-convergent, and does the static
 shared memory fit — and its verdict line says so. It has **no view of
 instruction availability**: whether the device code can be lowered for that
 part at all is `needs_cc` in `kernel.toml`, the author's claim, taken on
-trust ([docs/LIMITATIONS.md](docs/LIMITATIONS.md)).
+trust ([docs/LIMITATIONS.md](https://github.com/vyncint/launchbound/blob/main/docs/LIMITATIONS.md)).
 
 `apply` re-verifies what it emits through the gate before printing anything.
 `--no-verify` emits without it — for a machine that has the run directory
@@ -189,7 +189,7 @@ missing reason is a usage error, not a warning. It is never the default, and
 
 `prune` needing no GPU is the reason it exists as its own verb: it is the only
 part of the pipeline a developer on a laptop can run, and it is the part that
-finds the bugs. It also ships as a [GitHub Action](action/) —
+finds the bugs. It also ships as a [GitHub Action](https://github.com/vyncint/launchbound/tree/main/action) —
 `uses: vyncint/launchbound/action@v2` puts the gate in your CI.
 
 ## Compared to the neighbours
@@ -214,7 +214,7 @@ That report is re-runnable: `launchbound report <run> --rejected`.
 
 ## Limitations
 
-The honest list lives in [docs/LIMITATIONS.md](docs/LIMITATIONS.md) — read
+The honest list lives in [docs/LIMITATIONS.md](https://github.com/vyncint/launchbound/blob/main/docs/LIMITATIONS.md) — read
 it before trusting a result. Highlights: a clean gate is **not a proof of
 correctness** (reconverge's documented limits are inherited wholesale, and
 the launch-shape classifier recognizes the measured `warp_id()` family);
@@ -228,7 +228,7 @@ or not at all.
 
 ## License
 
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at
+Dual-licensed under [MIT](https://github.com/vyncint/launchbound/blob/main/LICENSE-MIT) or [Apache-2.0](https://github.com/vyncint/launchbound/blob/main/LICENSE-APACHE), at
 your option. Unless you explicitly state otherwise, any contribution
 intentionally submitted for inclusion in the work by you, as defined in the
 Apache-2.0 license, shall be dual licensed as above, without any additional

@@ -6,7 +6,7 @@ default: ci
 # "all required jobs green" aggregator job in ci.yml — this recipe is the
 # aggregator, and the `ci` job runs it verbatim on both OSes — so a new gate
 # becomes required by being listed here.
-ci: fmt-check clippy test docs deny schemas pins versions skill
+ci: fmt-check clippy test docs deny schemas pins versions links skill
 
 # Cargo errors on a memberless virtual workspace, so the cargo recipes no-op
 # until the first crate lands in S1. `grep -c` prints 1 when packages is empty.
@@ -62,6 +62,14 @@ pins:
 # to the next major bump (`cargo metadata` refuses to resolve).
 versions:
     ./scripts/check-versions.sh
+
+# Every link in the README is absolute, names the right GitHub path kind,
+# and points at something that exists. All eleven crates ship this file as
+# their readme, and crates.io rewrites a relative link against the crate's
+# directory -- so all eight were 404 on all eleven published 2.2.0 pages,
+# and nothing here could see it.
+links:
+    ./scripts/check-readme-links.sh
 
 # Golden + JSON Schema validation of report documents (S4).
 schemas:

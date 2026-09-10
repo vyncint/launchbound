@@ -20,7 +20,7 @@ members = [
 exclude = ["corpus"]
 
 [workspace.package]
-version = "2.2.0"
+version = "2.2.1"
 edition = "2024"
 # MSRV for crates that do not require the pinned nightly (CONTRIBUTING.md);
 # set by ratatui 0.30. The analysis and compile paths require
@@ -38,14 +38,14 @@ categories = ["development-tools", "development-tools::profiling"]
 # published crate is compatible with a release it was never built against --
 # harmless for a path build, wrong as a record. They sat at 2.0.0 through the
 # whole 2.1.0 line; `just versions` (and a test) now refuse the drift.
-launchbound-space = { path = "crates/launchbound-space", version = "2.2.0" }
-launchbound-prune = { path = "crates/launchbound-prune", version = "2.2.0" }
-launchbound-build = { path = "crates/launchbound-build", version = "2.2.0" }
-launchbound-bench = { path = "crates/launchbound-bench", version = "2.2.0" }
-launchbound-report = { path = "crates/launchbound-report", version = "2.2.0" }
-launchbound-search = { path = "crates/launchbound-search", version = "2.2.0" }
-launchbound-model = { path = "crates/launchbound-model", version = "2.2.0" }
-launchbound-metal = { path = "crates/launchbound-metal", version = "2.2.0" }
+launchbound-space = { path = "crates/launchbound-space", version = "2.2.1" }
+launchbound-prune = { path = "crates/launchbound-prune", version = "2.2.1" }
+launchbound-build = { path = "crates/launchbound-build", version = "2.2.1" }
+launchbound-bench = { path = "crates/launchbound-bench", version = "2.2.1" }
+launchbound-report = { path = "crates/launchbound-report", version = "2.2.1" }
+launchbound-search = { path = "crates/launchbound-search", version = "2.2.1" }
+launchbound-model = { path = "crates/launchbound-model", version = "2.2.1" }
+launchbound-metal = { path = "crates/launchbound-metal", version = "2.2.1" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

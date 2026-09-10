@@ -9,6 +9,34 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-09-10
+
+### Fixed
+
+- **Every relative link in the README was a 404 on all eleven crates.io
+  pages.** All eleven crates set `readme = "../../README.md"`, so this file
+  ships as each one's readme — and crates.io rewrites a *relative* link
+  against the crate's directory in the repository rather than the repository
+  root. `docs/SAFETY.md` was served as
+  `…/blob/HEAD/crates/launchbound-space/docs/SAFETY.md`, which does not
+  exist, and the same eight links were dead on every crate: `docs/SAFETY.md`,
+  `docs/ARCHITECTURE.md`, `docs/LIMITATIONS.md` (twice, once with an
+  anchor), the Action directory, `rust-toolchain.toml` and both licences.
+
+  Nothing here could see it. The same file renders correctly on GitHub,
+  where it really is at the root, so the only broken surface was the one
+  every reader arriving from crates.io meets first — and `docs/SAFETY.md`,
+  the document the README calls "the product", was among the dead.
+
+  The links are absolute now. `scripts/check-readme-links.sh` (in `just ci`)
+  refuses a relative one, checks every target still exists in the checkout,
+  and checks `blob` versus `tree` — GitHub *redirects* a `blob` URL for a
+  directory rather than failing, so a checker that only reads status codes
+  calls it fine.
+
+  Reaches future releases only: crates.io renders each version's readme as
+  published, so the 2.2.0 pages stay broken.
+
 ## [2.2.0] - 2026-09-09
 
 The cuda-oxide pin was 133 commits and one toolchain behind, and the watch
