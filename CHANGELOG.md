@@ -9,6 +9,26 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Changed
+
+- **termlens 0.11** for the TUI's PTY suite, the vendored skill, and the
+  `termlens-cli` pins the report action uses in `ci.yml` and `stress.yml`
+  (`check-skill-version.sh` holds all three equal to the dependency). 0.11
+  is termlens's stability candidate: from it no promised item changes
+  incompatibly before its 1.0.
+
+  Its one breaking change lands here as a simplification.
+  `Screen::unsupported()` returns a view instead of a slice of `Arc<str>`,
+  and `unsupported_overflow()` folds into it — so the pinned list and "the
+  record is not truncated" are now one assertion in
+  `crates/launchbound-tui/tests/emulation.rs`, because the view compares
+  equal to a slice only when the retained shapes match *and* nothing
+  overflowed the bound.
+
+  The pin's known-defect caveat is gone with it: termlens#320, which named
+  blink and strikethrough as unsupported although its attribute shadow
+  implements them, was fixed upstream in 0.10.2.
+
 ## [2.2.1] - 2026-09-10
 
 ### Fixed

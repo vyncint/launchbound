@@ -35,13 +35,12 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 /// it is a sequence that *might* change a cell, and would need reading
 /// before the goldens are trusted again.
 ///
-/// None of these is a termlens#320 false positive (`^[[5m`/`^[[25m`/`^[[9m`/
-/// `^[[29m`, blink and strikethrough, reported unsupported although the
-/// attribute shadow implements them). This application never blinks and
-/// never strikes through — `app.rs` uses `Modifier::BOLD` and
-/// `Modifier::BOLD | Modifier::REVERSED` and no other modifier — and none of
-/// those four bytes appears in its stream, so the pin carries no
-/// known-defect caveat.
+/// The pin carries no known-defect caveat. It used to note that termlens
+/// reported blink and strikethrough as unsupported although its attribute
+/// shadow implements them (termlens#320); that was fixed in termlens 0.10.2,
+/// so an entry here is a real gap whatever this application's modifiers are
+/// — and they are only `Modifier::BOLD` and `Modifier::BOLD |
+/// Modifier::REVERSED` in any case.
 const EXPECTED_UNSUPPORTED: [&str; 1] = ["^[[59m"];
 
 fn fixture(name: &str) -> PathBuf {
@@ -63,10 +62,6 @@ fn spawn(run_dir: &str, size: (u16, u16)) -> termlens::Result<Terminal> {
     Ok(t)
 }
 
-fn unsupported(screen: &Screen) -> Vec<String> {
-    screen.unsupported().iter().map(|s| s.to_string()).collect()
-}
-
 /// The views, as (key, a needle true only of that view).
 ///
 /// The panel's own top border, because it is the one marker that is unique
@@ -82,17 +77,17 @@ const VIEWS: [(char, &str); 3] = [
 ];
 
 fn check(label: &str, screen: &Screen) {
+    // One comparison for both halves of the record: termlens 0.11's
+    // `Unsupported` view is equal to a slice only when the retained shapes
+    // match *and* nothing overflowed the bound, so a truncated record fails
+    // here rather than passing as a shorter list.
     assert_eq!(
-        unsupported(screen),
+        screen.unsupported(),
         EXPECTED_UNSUPPORTED,
         "{label}: launchbound-tui emitted a sequence termlens does not \
-         model. Until it is understood, every golden in this crate is being \
-         held against a grid that may be wrong:\n{screen}"
-    );
-    assert_eq!(
-        screen.unsupported_overflow(),
-        0,
-        "{label}: the record is complete, not truncated"
+         model, or the record was truncated. Until it is understood, every \
+         golden in this crate is being held against a grid that may be \
+         wrong:\n{screen}"
     );
 }
 

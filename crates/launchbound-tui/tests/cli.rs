@@ -161,10 +161,17 @@ fn inspect_drives_the_real_tui() {
         screen.contains("1 overview · 2 ranking · 3 rejections · 4 progress"),
         "and a whole frame, not a half-painted one:\n{screen}"
     );
+    // The trailer goes to **stderr** since termlens 0.11 (termlens#340), so
+    // what stdout carries is a saved screen the tool reads back unedited.
     assert!(
-        screen.contains("still running at the deadline"),
+        String::from_utf8_lossy(&out.stderr).contains("still running at the deadline"),
         "launchbound-tui is a TUI, so inspect reports the deadline rather \
-         than an exit status:\n{screen}"
+         than an exit status: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !screen.contains("--- "),
+        "and stdout is the screen alone:\n{screen}"
     );
 }
 
