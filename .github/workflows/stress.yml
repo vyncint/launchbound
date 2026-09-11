@@ -72,11 +72,11 @@ jobs:
       - run: cargo test -p launchbound-tui --test cli -- --ignored
         env:
           TERMLENS_ARTIFACT_DIR: ${{ runner.temp }}/termlens
-      - uses: vyncint/termlens/.github/actions/report@e1b96c8203fd727fa3458af395719c429966ee82 # v0.10.1
+      - uses: vyncint/termlens/.github/actions/report@b8af0fa457dd023aa708a493b7f485256009f1a5 # v0.11.0
         if: failure()
         with:
           name: termlens-report-stress-${{ matrix.os }}
-          cli-version: "0.10.1" # checked against the manifest by check-skill-version.sh
+          cli-version: "0.11.0" # checked against the manifest by check-skill-version.sh
 
   hunt:
     name: hunt (${{ matrix.os }}, ${{ matrix.threads }} threads)
@@ -137,8 +137,8 @@ jobs:
               || { echo "::error::suite flaked at ${THREADS} thread(s), iteration ${i}/${per}"; exit 1; }
             echo "::endgroup::"
           done
-      - uses: vyncint/termlens/.github/actions/report@e1b96c8203fd727fa3458af395719c429966ee82 # v0.10.1
+      - uses: vyncint/termlens/.github/actions/report@b8af0fa457dd023aa708a493b7f485256009f1a5 # v0.11.0
         if: failure()
         with:
           name: termlens-report-hunt-${{ matrix.os }}-${{ matrix.threads }}
-          cli-version: "0.10.1" # checked against the manifest by check-skill-version.sh
+          cli-version: "0.11.0" # checked against the manifest by check-skill-version.sh
