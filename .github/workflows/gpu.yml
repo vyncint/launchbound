@@ -90,7 +90,7 @@ concurrency:
 
 env:
   PINNED_TOOLCHAIN: nightly-2026-08-28
-  RECONVERGE_VERSION: "0.6.0"
+  RECONVERGE_VERSION: "0.7.0"
 
 jobs:
   # Prune and compile on a plain runner, exactly as `stage` is designed to be
@@ -112,7 +112,7 @@ jobs:
         with:
           persist-credentials: false
           repository: NVlabs/cuda-oxide
-          ref: 26754ae52c26c097dc1c465a1e42c4c5d05a3d40
+          ref: b0f961df3af0ff140b3b006fa2b6750b71f43f62
           path: cuda-oxide
       - name: Install pinned toolchain
         working-directory: launchbound

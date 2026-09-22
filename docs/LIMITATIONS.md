@@ -8,7 +8,7 @@ set, and the corpus decided identically ([research-baseline](research-baseline.m
 
 ## The gate inherits reconverge's limits, wholesale
 
-A clean gate is **not a proof of correctness**. `reconverge` (v0.6.0) is
+A clean gate is **not a proof of correctness**. `reconverge` (v0.7.0) is
 summary-based and interprocedural, handles reducible control flow only,
 cannot evaluate non-literal masks, and puts data races entirely out of
 scope. Its own documentation is the authority; launchbound adds no analysis
