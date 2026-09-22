@@ -61,6 +61,41 @@ for manifest in crates/*/Cargo.toml; do
   fi
 done
 
+# The semver gate's baseline literal, which is the other version in this
+# repository that nobody compiles and so nobody notices. `ci.yml` compares
+# every pull request's public API against it, and the rule written beside it
+# is that it moves in the release PR *after* the publish -- left behind, the
+# gate measures against a release that is no longer the last one, and a break
+# introduced in between is outside what it can see. 2.2.1 published on
+# 2026-09-10 and the literal still said 2.2.0 twelve days later.
+#
+# The check is "equals the newest version on the index", which holds at both
+# ends of a release: during the release PR the workspace is the unpublished
+# X.Y.Z and the newest published is still the previous one, and after the
+# publish this fails until the literal is moved -- which is the follow-up
+# step docs/RELEASING.md already lists.
+baseline=$(sed -n 's/^ *--baseline-version \([0-9][0-9.]*\).*/\1/p' .github/workflows/ci.yml | head -1)
+if [ -z "$baseline" ]; then
+  echo "VERSION GATE: could not read --baseline-version from .github/workflows/ci.yml" >&2
+  status=1
+else
+  index=$(curl -fsS --max-time 20 https://index.crates.io/la/un/launchbound-cli 2>/dev/null || true)
+  if [ -z "$index" ]; then
+    # Offline is a normal way to run `just ci`; a gate that fails without a
+    # network is a gate people learn to skip.
+    echo "  semver baseline: $baseline (not checked -- the index was unreachable)"
+  else
+    newest=$(printf '%s\n' "$index" | sed -n 's/.*"vers":"\([^"]*\)".*/\1/p' | tail -1)
+    if [ "$baseline" != "$newest" ]; then
+      echo "VERSION GATE: the semver baseline is $baseline, the newest published launchbound-cli is $newest" >&2
+      echo "  move --baseline-version in .github/workflows/ci.yml (docs/RELEASING.md)" >&2
+      status=1
+    else
+      echo "  semver baseline: $baseline (the newest published)"
+    fi
+  fi
+fi
+
 if [ "$status" -eq 0 ]; then
   echo "every recorded version agrees"
 fi

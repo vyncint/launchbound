@@ -122,6 +122,79 @@ jobs:
             done
           done
 
+  # The GitHub Release, from the changelog rather than from generated notes.
+  #
+  # This workflow had no `gh release` step at all: it tested, published
+  # eleven crates, moved the floating tag and notified the testing repo, and
+  # never created the release. Every one has been cut by hand, so skipping
+  # one took only a distraction -- 2.2.1 went to crates.io on 2026-09-10 and
+  # the repository still showed 2.2.0 as Latest twelve days later, for the
+  # release whose whole content was "the documentation people land on now
+  # works".
+  #
+  # `--generate-notes` would be a downgrade: CHANGELOG.md here is written for
+  # a reader, marks `bench:` entries, and is the document the release was cut
+  # from, so the two cannot be allowed to disagree.
+  github-release:
+    needs: publish
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag')
+      || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # creates the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+      - name: Extract this version's changelog section
+        env:
+          TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { inside = 1; next }
+            inside && /^## \[/        { exit }
+            inside                     { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section; write it before releasing"
+            exit 1
+          fi
+          {
+            echo
+            echo '## Install'
+            echo
+            echo '```sh'
+            echo 'cargo install launchbound-cli'
+            echo '```'
+            echo
+            echo 'In CI, the prune gate is three lines:'
+            echo
+            echo '```yaml'
+            echo '- uses: actions/checkout@v5'
+            echo "- uses: vyncint/launchbound/action@v2"
+            echo '  with:'
+            echo '    cc: "8.6"'
+            echo '```'
+          } >> notes.md
+          echo "release notes:"; cat notes.md
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists; replacing its notes"
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" --title "launchbound ${TAG#v}" --notes-file notes.md
+          fi
+
   # Move the floating major tag to the release that was just published.
   #
   # The README tells users to write `vyncint/launchbound/action@v1`, so that
@@ -136,7 +209,7 @@ jobs:
   # The trigger filter above requires three numeric components, so pushing
   # `v1` here cannot re-enter this workflow.
   float-major-tag:
-    needs: publish
+    needs: [publish, github-release]
     # A tag push carries the tag in `ref_name`; a dispatch has to be told.
     # Runs for both, because RELEASING documents resuming a rate-limited
     # publish by dispatch — and a resumed release that skipped this job is a

@@ -65,9 +65,14 @@ tag had to be pushed by hand.
 
 ## After the tag
 
-- **The GitHub Release is created by hand**, from the CHANGELOG section:
-  `gh release create vX.Y.Z --title "launchbound X.Y.Z" --notes-file …`.
-  Every released version has one; do not skip it.
+- **The GitHub Release creates itself.** `release.yml`'s `github-release` job
+  runs after `publish` and builds it from this version's `CHANGELOG.md`
+  section, with the `## Install` block appended. It used to be a manual step
+  here, and 2.2.1 is what that cost: published to crates.io on 2026-09-10,
+  with the repository still showing 2.2.0 as Latest twelve days later — for
+  the release whose whole content was making the documentation people land on
+  work. If the job fails, it is because the changelog has no `## [X.Y.Z]`
+  section, and it says so.
 - **Verify what was published, not what was built.** `install.yml` installs
   from crates.io into a clean directory and runs the binaries; dispatch it
   once the version is live:
@@ -86,7 +91,13 @@ tag had to be pushed by hand.
 
   ```sh
   $EDITOR .github/workflows/ci.yml   # --baseline-version X.Y.Z
+  just versions                      # holds it to the newest published
   ```
+
+  `scripts/check-versions.sh` now checks that literal against the index, so
+  forgetting this step fails `just ci` rather than quietly measuring every
+  later pull request against the wrong release. It is skipped, with a notice,
+  when the index is unreachable.
 - **A break needs the `breaking` label on its PR**, which switches the semver
   job from `patch` to `major`. Without it the job fails, which is the point;
   with it, the release notes owe the reader a migration note.
