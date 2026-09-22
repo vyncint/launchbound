@@ -138,7 +138,7 @@ jobs:
         run: |
           echo "release-type: $RELEASE_TYPE"
           cargo semver-checks --workspace \
-            --baseline-version 2.2.1 \
+            --baseline-version 2.3.0 \
             --release-type "$RELEASE_TYPE"
 
   # MSRV applies to the crates that do not need the pinned nightly
