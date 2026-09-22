@@ -183,64 +183,6 @@ enum Command {
     },
 }
 
-/// A wall-clock budget in seconds, as typed at the command line.
-///
-/// Parsed rather than indexed. `split_at(text.len() - 1)` on a trimmed-empty
-/// argument is `0usize - 1`, so `--budget ""` and `--budget " "` panicked at
-/// exit 101 inside `core::str`.
-///
-/// The important half is what is *rejected*. `"NaN".parse::<f64>()` succeeds
-/// and so does `1e400` (as `inf`), and the guard that stops a sweep is
-/// `elapsed >= budget` — false for every value against NaN, and never true
-/// against infinity. So a value that looked accepted produced an
-/// **unbounded** measured sweep on real silicon, which is the one failure a
-/// budget exists to prevent. `is_finite()` and `> 0.0` close NaN, infinity
-/// and negatives together.
-///
-/// `--budget 0` stays valid and is not the same thing: the guard fires
-/// immediately and the run reports `budget exhausted after 0.0s`.
-fn parse_budget(text: &str) -> Result<f64, String> {
-    const ACCEPTED: &str = "expected a positive number of seconds, or a number with a \
-                            unit: `s` seconds, `m` minutes, `h` hours (e.g. `90s`, \
-                            `30m`, `1h`, or `45` for seconds)";
-
-    let text = text.trim();
-    if text.is_empty() {
-        return Err(format!("--budget needs a value — {ACCEPTED}"));
-    }
-
-    // Longest suffix first, so `min` is not read as `m` with `i` left over.
-    let (digits, multiplier) = [
-        ("hr", 3600.0),
-        ("h", 3600.0),
-        ("min", 60.0),
-        ("m", 60.0),
-        ("sec", 1.0),
-        ("s", 1.0),
-    ]
-    .into_iter()
-    .find_map(|(unit, multiplier)| text.strip_suffix(unit).map(|d| (d.trim(), multiplier)))
-    .unwrap_or((text, 1.0));
-
-    if digits.is_empty() {
-        return Err(format!("`{text}` is a unit with no number — {ACCEPTED}"));
-    }
-    let value: f64 = digits
-        .parse()
-        .map_err(|_| format!("`{text}` is not a valid --budget — {ACCEPTED}"))?;
-    if !value.is_finite() {
-        return Err(format!(
-            "`{text}` is not a finite budget — a sweep bounded by NaN or infinity is \
-             not bounded at all, which is the opposite of what --budget is for. \
-             {ACCEPTED}"
-        ));
-    }
-    if value < 0.0 {
-        return Err(format!("`{text}` is negative — {ACCEPTED}"));
-    }
-    Ok(value * multiplier)
-}
-
 /// A compute capability, as typed at the command line.
 ///
 /// Checked here so a mistake costs nothing. `prune` used to hand whatever
@@ -521,7 +463,7 @@ fn cmd_tune(
     reconverge_dir: Option<PathBuf>,
 ) -> anyhow::Result<ExitCode> {
     let budget_secs = budget
-        .map(parse_budget)
+        .map(|text| launchbound_bench::parse_budget("--budget", text))
         .transpose()
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     // On any backend: an exhaustive sweep makes no random choice, so there
@@ -1212,59 +1154,4 @@ fn cmd_space(
         }
     }
     Ok(ExitCode::SUCCESS)
-}
-
-#[cfg(test)]
-mod budget_tests {
-    use super::parse_budget;
-
-    #[test]
-    fn accepted_forms_are_seconds() {
-        for (input, seconds) in [
-            ("45", 45.0),
-            ("90s", 90.0),
-            ("30m", 1800.0),
-            ("30min", 1800.0),
-            ("1h", 3600.0),
-            ("1hr", 3600.0),
-            ("2sec", 2.0),
-            ("  90s  ", 90.0),
-            // Zero is a budget, and a meaningful one: the guard fires at
-            // once and the run says how far it got.
-            ("0", 0.0),
-        ] {
-            assert_eq!(parse_budget(input), Ok(seconds), "{input}");
-        }
-    }
-
-    #[test]
-    fn nothing_unbounded_or_unparseable_is_accepted() {
-        // The first two used to panic at exit 101; the two after them used
-        // to be accepted and produce an unbounded sweep.
-        for input in ["", "   ", "NaNs", "1e400s", "inf", "-5s", "abc", "s", "min"] {
-            let err = parse_budget(input).unwrap_err();
-            assert!(
-                err.contains("--budget") || err.contains(&format!("`{}`", input.trim())),
-                "{input}: the message must name the flag or the value: {err}"
-            );
-            assert!(
-                err.contains("expected a positive number of seconds"),
-                "{input}: and say what would have been accepted: {err}"
-            );
-        }
-    }
-
-    #[test]
-    fn a_budget_that_parses_can_actually_bound_a_sweep() {
-        // The property the guard needs, stated where it can fail: `x >= NaN`
-        // is false for every x, and nothing is ever `>= inf`.
-        for input in ["0", "45", "90s", "30m", "1h"] {
-            let seconds = parse_budget(input).unwrap();
-            assert!(seconds.is_finite() && seconds >= 0.0, "{input}");
-            assert!(
-                f64::MAX >= seconds,
-                "{input}: an elapsed time must be able to reach it"
-            );
-        }
-    }
 }

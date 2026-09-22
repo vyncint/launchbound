@@ -12,5 +12,5 @@ pub mod run;
 pub mod stats;
 
 pub use plan::{ArgSpec, BenchPlan, BenchSpec, Candidate, PlanError};
-pub use run::{CandidateResult, Results, run_plan};
+pub use run::{CandidateResult, Results, parse_budget, run_plan};
 pub use stats::{Summary, indistinguishable, summarize};

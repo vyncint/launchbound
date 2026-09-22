@@ -9,6 +9,33 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`launchbound-runner` accepted a malformed `--budget-secs` in silence,
+  on the machine that costs money.** It parsed every value with
+  `.parse().ok()`, which discards the error, so:
+
+  | typed | meant |
+  |---|---|
+  | `--budget-secs 30m` | **no budget** — the spelling `tune --budget` takes, prints in `--help`, and anyone types from memory |
+  | `--budget-secs nan` | no budget — `elapsed >= NaN` is false for every elapsed |
+  | `--budget-secs -5` | exhausted before the first candidate |
+  | `--seed abc` | seed 0, and then *recorded* as `random:0`, so the provenance disagreed with what was typed |
+  | `--budget 30m` | a missing file named `--budget` |
+
+  The laptop-side binary has had this right for a while: `parse_budget` in
+  `launchbound-cli`, whose doc comment is a written account of these exact
+  failures — the `usize - 1` panic on an empty value, `"NaN".parse::<f64>()`
+  succeeding, `1e400` arriving as infinity. All of that rigour was on the
+  binary that cannot spend a GPU-hour, and none of it on the one that can.
+
+  It is one function now, in `launchbound-bench` beside the `budget_secs`
+  it fills, taking the flag name so a message sends the reader to the right
+  binary's `--help`. The runner refuses an unparseable `--seed`, a flag with
+  no value, an unknown flag and a third positional path, and its crate has
+  tests — it was the only one in the workspace with none. Restoring
+  `.parse().ok()` fails three of the seven, which is how they were checked.
+
 ### Changed
 
 - **termlens 0.11** for the TUI's PTY suite, the vendored skill, and the
