@@ -11,6 +11,31 @@ change measured timings are marked `bench:`.
 
 ### Fixed
 
+- **The GitHub Release is created by the release workflow, and the semver
+  baseline is checked.** Two version literals nobody compiles, and both had
+  drifted.
+
+  `release.yml` had no `gh release` step at all — it tested, published eleven
+  crates, moved the floating tag and notified the testing repository, and
+  never created the release. Every one had been cut by hand, so skipping one
+  took only a distraction: **2.2.1 went to crates.io on 2026-09-10 and the
+  repository still showed 2.2.0 as Latest**, for the release whose whole
+  content was making every relative link in the README stop 404ing. The
+  `github-release` job builds the notes from this version's `CHANGELOG.md`
+  section rather than from `--generate-notes`, which would be a downgrade
+  from a changelog written for a reader.
+
+  `ci.yml`'s `--baseline-version` moves to **2.2.1**. The comment beside it
+  already said what the rule was — the literal moves in the release PR after
+  the publish — and it had not been followed, so the gate was measuring every
+  pull request against 2.2.0 and anything that changed incompatibly in 2.2.1
+  was outside what it could see. `scripts/check-versions.sh` now holds the
+  literal equal to the newest version on the index, so the next time this
+  drifts it fails `just ci` instead of waiting to be noticed. Unreachable
+  index: skipped with a notice, because a gate that fails offline is a gate
+  people learn to skip.
+
+
 - **`launchbound-runner` accepted a malformed `--budget-secs` in silence,
   on the machine that costs money.** It parsed every value with
   `.parse().ok()`, which discards the error, so:
