@@ -1,0 +1,43 @@
+name: An admitted candidate failed to build
+description: >-
+  The gate passed a configuration and `cuda-oxide` then failed to compile
+  it. This is a known hole with a known cause; reports still help, because
+  each one names another codegen-time const the gate does not evaluate.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        `docs/LIMITATIONS.md` ("cuda-oxide is alpha") records why this
+        happens: `cargo check` under the reconverge driver does not evaluate
+        all codegen-time consts, so a gate-clean candidate can still fail the
+        real compile — an invalid `#[unroll]` factor is the case that was
+        found first.
+  - type: input
+    id: config
+    attributes:
+      label: The configuration
+      description: "As the report prints it, e.g. `block_x=64 tile=128`."
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: The compiler error
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: kernel
+    attributes:
+      label: The kernel and its `kernel.toml`
+      render: rust
+    validations:
+      required: true
+  - type: input
+    id: pin
+    attributes:
+      label: cuda-oxide pin
+      description: "`scripts/check-pins.sh` lists every site; rust-toolchain.toml names the set."
+    validations:
+      required: true

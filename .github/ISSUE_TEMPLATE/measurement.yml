@@ -1,0 +1,48 @@
+name: A measurement looks wrong
+description: >-
+  A timing, a ranking, or a statistic does not match what you observe —
+  including the model's estimate disagreeing with silicon.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Before filing: a result is valid only for the GPU, driver and
+        compiler in its provenance, and `sm_75` and `sm_86` do not transfer
+        (`docs/LIMITATIONS.md`, "Results do not port"). Two configurations
+        whose 95% intervals overlap are reported indistinguishable and are
+        deliberately not ranked.
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - cuda (measured on NVIDIA silicon)
+        - metal (measured on Apple Silicon — no convergence gate on this path)
+        - model (estimated, not measured)
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: What you saw, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: The run directory
+      description: >-
+        `launchbound report <run> --json`, or the `results.json` itself. It
+        carries the device name, the driver version, the warmup and repeat
+        counts and every timing sample, which is most of what this needs.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance
+      description: "`launchbound --version`, the cuda-oxide pin, the nightly, the GPU, the driver and CUDA versions."
+    validations:
+      required: true

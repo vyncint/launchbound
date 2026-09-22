@@ -1,0 +1,70 @@
+name: The gate admitted or refused the wrong configuration
+description: >-
+  A configuration launchbound admitted is convergence-unsafe, or one it
+  refused is safe. This is the report that matters most — refusing a fast
+  configuration is the product, and getting that wrong in either direction
+  is the product failing.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        If the analyzer is wrong about the *kernel* rather than about the
+        *launch shape*, it belongs in
+        [reconverge](https://github.com/vyncint/reconverge/issues) — this
+        project ships it as a component and does not reimplement it.
+        `docs/SAFETY.md` has the decision rule this form is about.
+  - type: textarea
+    id: kernel
+    attributes:
+      label: The kernel
+      description: >-
+        Minimal `#[kernel]` source, plus the `kernel.toml` that declares its
+        space. A corpus kernel is fine — name it instead.
+      render: rust
+    validations:
+      required: true
+  - type: input
+    id: config
+    attributes:
+      label: The configuration
+      description: "As the report prints it, e.g. `block_x=64 tile=128`."
+    validations:
+      required: true
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Which way is it wrong?
+      options:
+        - Admitted, and it is unsafe (a false negative — the worst case)
+        - Refused, and it is safe (a false positive)
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Why you believe that
+      description: >-
+        A hang on hardware, a `compute-sanitizer synccheck` report, a lane
+        argument, or the `cargo reconverge check --strict` output for the
+        shape. Anything is better than nothing; a hang with a driver version
+        is best.
+    validations:
+      required: true
+  - type: input
+    id: cc
+    attributes:
+      label: "`--cc`"
+      description: "The capability you ran at. A verdict at one does not transfer to another (docs/LIMITATIONS.md)."
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance
+      description: >-
+        `launchbound --version`, the cuda-oxide pin, the nightly, and — if a
+        measurement is involved — the GPU, driver and CUDA versions. The
+        report directory's `results.json` carries most of this.
+    validations:
+      required: true
