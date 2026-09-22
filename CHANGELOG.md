@@ -29,6 +29,62 @@ change measured timings are marked `bench:`.
   is pointed at reconverge, which this project ships as a component and does
   not reimplement.
 
+- **Tests for the part of this tool that decides what the number is.** 94
+  tests for 7,571 lines, and the distribution was the finding: the
+  best-tested crates were the ones that *present* a result or *refuse* a
+  candidate, and the ones that produce it were the thin ones. 123 now.
+
+  - **The exit-code contract**, which the README states and nothing checked.
+    `launchbound-cli` had three tests, all about `parse_budget`, and no
+    integration test at all. Exit 1 — "the fastest candidates were refused
+    and the chosen one is slower" — is the product's whole argument in one
+    integer, and it is the one a refactor can quietly turn into 0, because
+    the text on stdout is identical either way.
+
+    The recorded Metal sweep has no refused candidate (`gate: "none"`), so
+    asserting against it as-is would have been exactly the kind of test that
+    cannot fail. The test marks the **two** fastest candidates refused — two,
+    because their 95% intervals overlap each other and `rejected_faster`
+    requires the refused interval to sit wholly below the chosen one's, which
+    is the same "indistinguishable, never ranked" rule the ranking uses — and
+    then requires exit 1. Replacing the branch with `ExitCode::SUCCESS` fails
+    it; nothing else in the suite notices.
+
+    Also checked: `--allow-unsafe` without `--reason`, and with a blank one;
+    `--reason` without `--allow-unsafe`; that `tune` has no `--allow-unsafe`
+    at all; that a malformed `--cc` is refused before anything is spawned;
+    and that `--json` and the text report never disagree about the status.
+
+  - **Checkpoint and resume.** `run_plan` needs a device, but the two halves
+    that decide whether a resume is safe do not. A checkpoint misread as "no
+    checkpoint" silently re-measures candidates that cost GPU time, so each
+    untrustworthy shape — not JSON, `results.v2`, no `schema` at all — is now
+    required to fail with the path named. And the write-then-rename leaves no
+    `.json.tmp` behind.
+
+  - **The Metal path.** `launchbound-metal` had one test, about rewriting a
+    constant in a string. Six now: the no-gate notice is asserted as text
+    rather than trusted as a constant, the off-macOS stub must refuse rather
+    than return an empty sweep, a CUDA-only dimension with no MSL twin is
+    skipped rather than invented, and an unterminated constant is named
+    rather than silently truncating the source.
+
+  - **The model's ranking**, pinned against the real corpus kernel rather
+    than a synthetic space, as a relation rather than as numbers: the same
+    space ranks the same way twice, and sorting by cost is a total order with
+    nothing infinite in it. Every other test there checked a piece of the
+    cost function; none checked that the pieces compose into the same order.
+    Plus: an unknown capability must list the ones that exist.
+
+- **CI executes a Metal dispatch.** The macOS leg compiled the
+  `cfg(target_os = "macos")` code and then ran a string-rewriting test;
+  `run_metal` — the function behind "On Apple Silicon it measures on Metal" —
+  had no caller outside the CLI, and the only evidence the path worked was
+  one committed sweep on one machine. A smoke step now tunes one corpus
+  kernel under a 60s budget and reads the run back. It asserts that a
+  dispatch happened and produced a readable `results.v1`, not that the
+  numbers mean anything: timings from a shared runner are not measurements.
+
 ### Fixed
 
 - **The GitHub Release is created by the release workflow, and the semver

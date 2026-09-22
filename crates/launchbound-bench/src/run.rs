@@ -596,7 +596,105 @@ pub fn parse_budget(flag: &str, text: &str) -> Result<f64, String> {
 
 #[cfg(test)]
 mod budget_tests {
-    use super::parse_budget;
+    use super::{Results, parse_budget};
+
+    // ---- checkpoint and resume -------------------------------------------
+    //
+    // The checkpoint is the only record that a candidate was measured, and
+    // every one of them cost GPU time. `run_plan` cannot be exercised without
+    // a device, but the two halves that decide whether a resume is safe --
+    // reading the file and writing it atomically -- can be, and they are
+    // where a wrong answer is expensive: a checkpoint misread as "start over"
+    // silently re-measures, and one misread as valid resumes into nonsense.
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/tmp")
+            .join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        dir
+    }
+
+    fn sample_results() -> Results {
+        Results {
+            schema: "results.v1".into(),
+            kernel: "k".into(),
+            entry: "k".into(),
+            plan_cc: "8.6".into(),
+            device_name: "probe".into(),
+            device_cc: "8.6".into(),
+            driver_version: "0".into(),
+            candidates: Vec::new(),
+            total_gpu_seconds: 1.5,
+            strategy: Some("exhaustive".into()),
+            budget_exhausted: false,
+        }
+    }
+
+    #[test]
+    fn no_checkpoint_is_a_fresh_start_not_an_error() {
+        let dir = scratch("results-absent");
+        assert!(
+            Results::load(&dir.join("results.json"))
+                .expect("a missing file is not a failure")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_checkpoint_round_trips_and_leaves_no_temporary_behind() {
+        let dir = scratch("results-roundtrip");
+        let path = dir.join("results.json");
+        let written = sample_results();
+        written.checkpoint(&path).expect("checkpointing");
+
+        let read = Results::load(&path).expect("readable").expect("present");
+        assert_eq!(read.kernel, written.kernel);
+        assert_eq!(read.total_gpu_seconds, written.total_gpu_seconds);
+        assert_eq!(read.strategy, written.strategy);
+
+        // Write-then-rename: the `.json.tmp` must not survive, or the next
+        // reader of the directory finds two documents and no rule for which.
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .expect("readable directory")
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
+    }
+
+    #[test]
+    fn a_checkpoint_that_cannot_be_trusted_stops_the_run() {
+        // Each of these used to be indistinguishable from "no checkpoint",
+        // and resuming from that discards measurements that cost GPU time.
+        // The error must name the path, because the operator is looking at a
+        // run directory, not at a stack trace.
+        let dir = scratch("results-untrustworthy");
+        for (name, body, expected) in [
+            ("not-json.json", "{ this is not json", "not JSON"),
+            (
+                "wrong-schema.json",
+                r#"{"schema":"results.v2","kernel":"k"}"#,
+                "unsupported results schema",
+            ),
+            (
+                "no-schema.json",
+                r#"{"kernel":"k","candidates":[]}"#,
+                "no `schema` field",
+            ),
+        ] {
+            let path = dir.join(name);
+            std::fs::write(&path, body).expect("writing the probe");
+            let err = Results::load(&path).expect_err("must not be read as a fresh start");
+            assert!(err.contains(expected), "{name}: {err}");
+            assert!(
+                err.contains(&path.display().to_string()),
+                "{name}: the message must name the file: {err}"
+            );
+        }
+    }
 
     #[test]
     fn accepted_forms_are_seconds() {

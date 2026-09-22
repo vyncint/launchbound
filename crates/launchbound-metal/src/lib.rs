@@ -330,6 +330,114 @@ mod tests {
     use super::*;
     use launchbound_space::{KernelSpec, enumerate};
 
+    /// A spec with one block dimension and one spec dimension.
+    fn spec(extra: &str) -> KernelSpec {
+        KernelSpec::from_toml_str(
+            "t",
+            &format!(
+                r#"
+            [kernel]
+            name = "t"
+            entry = "t"
+            domain = 1
+            [dims.block_x]
+            values = [64]
+            [dims.tile]
+            role = "spec"
+            values = [512]
+            {extra}
+            "#
+            ),
+        )
+        .unwrap()
+    }
+
+    /// The whole Metal path is one function, `run_metal`, and until this
+    /// module grew nothing called it outside the CLI. It cannot be *run*
+    /// here — it needs a device, and these tests are the part that does not
+    /// — but the decisions it makes before touching one can be.
+    #[test]
+    fn the_notice_is_in_the_text_and_not_only_in_a_comment() {
+        // `docs/LIMITATIONS.md` promises this appears on every Metal
+        // surface. A constant nothing asserts is a promise nothing keeps.
+        assert!(METAL_NO_GATE_NOTICE.contains("NO convergence gate"));
+        assert!(
+            METAL_NO_GATE_NOTICE.contains("NOT checked"),
+            "the notice must say the bug class is not checked, not merely that a gate is absent"
+        );
+    }
+
+    #[test]
+    fn off_macos_the_backend_refuses_rather_than_returning_nothing() {
+        // The shape that matters: a Linux caller asking for Metal gets an
+        // error naming the platform, not an empty `Results` that reads like
+        // a sweep in which nothing happened to be measured.
+        #[cfg(not(target_os = "macos"))]
+        {
+            let spec = spec("");
+            let err = run_metal(&spec, &[], None, &mut |_| {})
+                .expect_err("Metal off macOS must fail loudly");
+            assert!(
+                matches!(err, MetalError::Backend(ref m) if m.contains("macOS")),
+                "the message must name the platform: {err}"
+            );
+        }
+        // On macOS the same call reaches the runtime, where "no device" is
+        // the honest failure; either way it is an error and never `Ok`.
+        #[cfg(target_os = "macos")]
+        {
+            let spec = spec("");
+            assert!(
+                run_metal(&spec, &[], None, &mut |_| {}).is_err(),
+                "a kernel with no kernel.metal cannot be measured"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dimension_with_no_msl_twin_is_skipped_rather_than_failing() {
+        // `lb_max` is a CUDA launch-bound and has no Metal meaning, so the
+        // MSL source will not declare it. Skipping is deliberate; erroring
+        // would make every kernel with a CUDA-only dimension untunable here.
+        let spec = spec("[dims.lb_max]\nrole = \"spec\"\nvalues = [256]");
+        let config = enumerate(&spec).unwrap().remove(0);
+        let src = "constant constexpr uint TILE = 128;\nkernel void t() {}\n";
+        let out = specialize_msl(src, &spec, &config).unwrap();
+        assert!(out.contains("constant constexpr uint TILE = 512;"));
+        assert!(
+            !out.contains("LB_MAX"),
+            "a dimension the MSL does not declare must not be invented"
+        );
+    }
+
+    #[test]
+    fn an_unterminated_constant_is_named_rather_than_silently_truncating() {
+        // Without the `;` there is no end to replace up to. Rewriting to the
+        // end of the file would produce MSL that compiles into something
+        // else; the error names the constant instead.
+        let spec = spec("");
+        let config = enumerate(&spec).unwrap().remove(0);
+        let src = "constant constexpr uint TILE = 128";
+        let err = specialize_msl(src, &spec, &config).expect_err("must not truncate");
+        assert!(
+            matches!(err, MetalError::Source(ref m) if m.contains("TILE")),
+            "the message must name the constant: {err}"
+        );
+    }
+
+    #[test]
+    fn a_block_dimension_is_not_rewritten_into_the_source() {
+        // Block size is a dispatch argument on Metal, not a compile-time
+        // constant, and the existing test below says "spec dims only" —
+        // this is the other half of that sentence, stated where it can fail.
+        let spec = spec("");
+        let config = enumerate(&spec).unwrap().remove(0);
+        let src = "constant constexpr uint BLOCK_X = 1;\nconstant constexpr uint TILE = 128;\n";
+        let out = specialize_msl(src, &spec, &config).unwrap();
+        assert!(out.contains("constant constexpr uint BLOCK_X = 1;"));
+        assert!(out.contains("constant constexpr uint TILE = 512;"));
+    }
+
     #[test]
     fn msl_specialization_rewrites_spec_dims_only() {
         let spec = KernelSpec::from_toml_str(
