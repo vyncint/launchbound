@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A wrong verdict from the convergence analyzer itself
+    url: https://github.com/vyncint/reconverge/issues/new?template=false_positive.yml
+    about: >-
+      launchbound ships reconverge as a component and does not reimplement it.
+      If the finding is wrong about the kernel rather than about the launch
+      shape, it belongs upstream — zero false positives at default confidence
+      is a release requirement there.

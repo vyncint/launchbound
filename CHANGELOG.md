@@ -9,6 +9,26 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Added
+
+- **Issue forms, a pull-request template and `CODEOWNERS`.** `.github/` held
+  `scripts/` and `workflows/` and nothing else.
+
+  The forms matter more here than they would for a library, because of what a
+  report has to contain before anyone can act on it: a result depends on the
+  GPU, the driver, the CUDA version, the compute capability, the cuda-oxide
+  commit, the nightly and which of the three backends produced it, and
+  `docs/LIMITATIONS.md` has a section on exactly that. "The tuner picked a
+  slow configuration" is unactionable; the same report with its provenance
+  block is a bug.
+
+  Three of them — a wrong convergence verdict in either direction, a
+  measurement that disagrees with what you observe, and the known hole where
+  a gate-clean candidate still fails the real compile. Blank issues are off,
+  and a finding that is wrong about the kernel rather than the launch shape
+  is pointed at reconverge, which this project ships as a component and does
+  not reimplement.
+
 ### Fixed
 
 - **`launchbound-runner` accepted a malformed `--budget-secs` in silence,

@@ -3,6 +3,23 @@
 Thanks for your interest. Issues and small PRs are welcome; large features
 are better discussed first.
 
+There are three issue forms, and which one you pick matters because a result
+here depends on more than the code — the GPU, the driver, the CUDA version,
+the compute capability, the cuda-oxide commit, the nightly, and which of the
+three backends produced the number (`docs/LIMITATIONS.md`, "Results do not
+port"). The forms ask for that provenance so a report is actionable rather
+than a starting point for questions:
+
+| form | for |
+|---|---|
+| **The gate admitted or refused the wrong configuration** | a convergence verdict that is wrong in either direction — the report that matters most, since refusing a fast configuration *is* the product |
+| **A measurement looks wrong** | a timing, a ranking or a statistic that disagrees with what you observe, including the model's estimate against silicon |
+| **An admitted candidate failed to build** | the known hole where a gate-clean configuration still fails the real compile |
+
+A finding that is wrong about the *kernel* rather than the *launch shape*
+belongs in [reconverge](https://github.com/vyncint/reconverge/issues): this
+project ships it as a component and does not reimplement it.
+
 > **These four projects share one contributor pattern** — the same commit
 > rules, the same DCO, the same AI policy, the same CI and release shape:
 > [termlens](https://github.com/vyncint/termlens),
