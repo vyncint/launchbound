@@ -55,6 +55,21 @@ change measured timings are marked `bench:`.
   index: skipped with a notice, because a gate that fails offline is a gate
   people learn to skip.
 
+- **`docs/LIMITATIONS.md` contradicted itself about the T4, and claimed a
+  measurement that never happened.** Line 147 said "Only 8.6 (A10G) and 7.5
+  (T4) have ever had a kernel measured on them here"; line 167, in the
+  section on results not porting, said "nothing has been measured on a T4".
+  The evidence agrees with the second: `docs/research-baseline.md` records
+  the tier-2 box as a `g5.xlarge` with an A10G, *chosen over the T4 by the
+  operator*, and `model-calibration.toml` names one device.
+
+  This is not a footnote. `README.md` points at this file twice — "read that
+  before trusting a result" — and the paragraph exists specifically to tell a
+  reader which rows of the model's device table are experience and which are
+  documented capacity. Someone deciding whether to act on a `--cc 7.5`
+  ranking was reading a sentence that said it had been validated on silicon.
+  Five of the six rows are capacity, not four.
+
 
 - **`launchbound-runner` accepted a malformed `--budget-secs` in silence,
   on the machine that costs money.** It parsed every value with

@@ -144,9 +144,19 @@ Two consequences worth stating:
   and differ in SM count (L4 58 / L40 142, H100 SXM 132 / PCIe 114), and
   the table picks one — the rows say which.
 
-Only 8.6 (A10G) and 7.5 (T4) have ever had a kernel measured on them here.
-The other four rows are documented capacity, not experience; the model's
-Spearman correlations below were measured on the A10G alone.
+**8.6 (A10G) is the only capability anything here has ever been measured
+on.** The other five rows are documented capacity, not experience, and that
+includes 7.5: `docs/research-baseline.md` records the tier-2 box as a
+`g5.xlarge` with an A10G, "chosen over the T4 by the operator", and
+`model-calibration.toml` names one device. A `--cc 7.5` ranking is the model
+speaking about a part no kernel in this repository has run on, which is
+exactly what "Results do not port" below means by a verdict that does not
+transfer — the model's Spearman correlations were measured on the A10G
+alone.
+
+(This paragraph used to claim the T4 as well, twenty lines above the section
+that says "nothing has been measured on a T4". Both cannot be true, and the
+evidence in the repository is with the second one.)
 
 ## Measurement noise floor
 
