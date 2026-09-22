@@ -230,3 +230,74 @@ changes nothing this corpus can observe, and that the compile path works at
 the new pin on a machine with LLVM 21 and no CUDA toolkit. It does not
 establish that PTX *runs*: `inspect` lowers, it does not execute, and no GPU
 was involved in any line of this section. The corpus is still six kernels.
+
+## Re-measured: nightly-2026-08-28, cuda-oxide `b0f961df`, reconverge 0.7.0
+
+2026-09-22, and the first time anything automated has run this project's CUDA
+path (#83). The headline result in the README was produced by hand on
+2026-08-20 and had not been reproduced since; the lockstep set moved twice in
+between, and `cargo check` under the reconverge driver is documented as not
+evaluating all codegen-time consts, so a gate-clean candidate failing the
+real compile was a live possibility nobody would have heard about.
+
+### Provenance
+
+| | |
+|---|---|
+| host | AWS `g5.xlarge`, us-east-2c, **NVIDIA A10G** (`sm_86`, cc 8.6), 15 GiB RAM |
+| driver | 595.71.05 |
+| CUDA | 13.2 (`cuda_13.2.r13.2/compiler.37434383_0`) |
+| rustc | 1.100.0-nightly (e457a7b0d 2026-08-27) |
+| analyzer | `cargo-reconverge 0.7.0` (from crates.io) |
+| compiler | `cargo-oxide 0.2.1`, built from the pinned checkout |
+| cuda-oxide | `b0f961df3af0ff140b3b006fa2b6750b71f43f62` |
+| launchbound | `v2.3.0` |
+
+Run unattended from EC2 user-data: `ssm:StartSession` is denied to the role
+this account uses, and `gpu-sg` has no inbound rules, so the serial console
+was the only channel back. The instance terminates itself.
+
+### The gate, on silicon
+
+```
+prune (cc 8.6) ...
+  3 admitted, 8 refused; compiling admitted specializations ...
+```
+
+The same 3 / 8 split as on a laptop and as recorded for `reduce-flip`
+throughout this repository. **All three admitted candidates compiled** — the
+`#[unroll]`-class hole under "cuda-oxide is alpha" in
+[LIMITATIONS](LIMITATIONS.md) did not bite at this pin.
+
+### The measurement
+
+```
+3/3 measured ok, 3.2 GPU-seconds, budget not exhausted
+
+0.033792 ms  [0.033792, 0.034816]  n=99   block_x=32 tile=128
+0.045056 ms  [0.045056, 0.045056]  n=75   block_x=32 tile=256
+0.074752 ms  [0.074752, 0.074752]  n=99   block_x=32 tile=512
+```
+
+**`block_x=32 tile=128` at 0.0338 ms is the figure the README quotes**, from
+a run a month earlier on a different instance of the same part, under a
+different analyzer and a different cuda-oxide. That the two agree to the
+digit published is the strongest evidence this repository has that its
+measurement path is stable — and it is the first time the claim has been
+checked rather than carried forward.
+
+Every structural invariant held: the results declare `results.v1`, no
+candidate appears that the plan did not contain, no admitted candidate failed
+to run, and something was measured.
+
+### One thing to look at, not a defect here
+
+Two of the three intervals are **zero-width** (`[0.045056, 0.045056]`), and
+every median is a multiple of 1024 ns. That is the CUDA event timer's
+granularity showing through at these durations, not a claim of perfect
+reproducibility: `reduce-flip` at this size runs for ~30–75 µs, which is only
+tens of timer ticks. It does not affect the ranking — the three are far apart
+— but "two configurations whose intervals overlap are reported
+indistinguishable" is doing less work at this scale than the noise-floor
+section above implies, and a kernel this short deserves a note rather than a
+silent zero. The A10G numbers in that section were taken on longer sweeps.

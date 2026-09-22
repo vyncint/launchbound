@@ -9,6 +9,26 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Changed
+
+- **The CUDA path has been run, on silicon, at the current pin set** (#83) —
+  the first time anything automated has. An A10G (cc 8.6, driver 595.71.05,
+  CUDA 13.2) with `cargo-reconverge 0.7.0`, `cargo-oxide 0.2.1` and
+  cuda-oxide `b0f961df`: the gate admitted 3 and refused 8, all three
+  admitted candidates compiled, and all three measured.
+
+  **`block_x=32 tile=128` came in at 0.033792 ms — the 0.0338 ms the README
+  quotes**, from a run a month earlier on a different instance of the same
+  part under a different analyzer and a different cuda-oxide. The provenance
+  and the full numbers are in
+  [`docs/research-baseline.md`](docs/research-baseline.md).
+
+  One observation recorded rather than smoothed over: at these durations
+  (~30–75 µs) two of the three 95% intervals are zero-width and every median
+  is a multiple of 1024 ns, which is the CUDA event timer's granularity
+  showing through. It does not affect this ranking, and it is noted where the
+  noise floor is discussed.
+
 ## [2.3.0] - 2026-09-22
 
 The production-readiness release. It moves the lockstep set onto a
