@@ -36,6 +36,41 @@ jobs:
       - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: just,cargo-deny
+      # The Metal path, executed rather than merely compiled.
+      #
+      # `run_metal` is the function behind the README's "On Apple Silicon it
+      # measures on Metal", and until now nothing called it outside the CLI:
+      # its crate had one test, about rewriting a constant in a source
+      # string, and the macOS leg compiled the `cfg(target_os = "macos")`
+      # code and then ran that. The only evidence the path works was
+      # `runs/reduce-stable-metal`, one sweep on one machine, committed and
+      # never re-run.
+      #
+      # A smoke test, deliberately: it asserts that a dispatch happens and
+      # produces a readable `results.v1`, not that the numbers are anything.
+      # Timings from a shared runner are not measurements and this does not
+      # pretend otherwise -- `--budget 60s` bounds it, and `report` reading
+      # the run back is the assertion.
+      #
+      # `--cc` is required by the parser and ignored on this path, which has
+      # no gate to run at any capability.
+      - name: Measure one kernel on Metal
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          launchbound() { cargo run -q -p launchbound-cli --bin launchbound -- "$@"; }
+          launchbound tune corpus/reduce-stable --cc 8.6 --backend metal \
+            --out "${RUNNER_TEMP}/metal-smoke" --budget 60s
+          launchbound report "${RUNNER_TEMP}/metal-smoke" --json > "${RUNNER_TEMP}/metal.json"
+          python3 - "${RUNNER_TEMP}/metal.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          chosen = report.get("chosen")
+          assert chosen, "the Metal sweep chose nothing"
+          assert chosen["summary"]["median_ms"] > 0, chosen
+          print("metal ok:", chosen["config"], chosen["summary"]["median_ms"], "ms")
+          PY
+
       - run: just ci
         env:
           # Every screen a failing termlens wait embeds is also written here,

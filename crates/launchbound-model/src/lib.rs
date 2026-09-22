@@ -376,6 +376,84 @@ fn ranks(values: &[f64]) -> Vec<f64> {
 mod tests {
     use super::*;
 
+    /// The ranking the model produces for a real corpus kernel, pinned.
+    ///
+    /// `--backend model` is what runs when there is no GPU, and its output is
+    /// an *ordering* a user acts on. Every other test here checks a piece of
+    /// the cost function; none checked that the pieces compose into the same
+    /// order twice. A change to `cost` that looks like a refinement and
+    /// silently reverses two candidates would pass all of them.
+    ///
+    /// Pinned as a relation, not as numbers: the cost scale is the model's
+    /// own business and may be rescaled, but "more occupancy at the same
+    /// wave count ranks better" is the claim.
+    #[test]
+    fn the_ranking_is_stable_and_ordered_by_cost() {
+        use launchbound_space::enumerate;
+
+        // The real corpus kernel, loaded from disk, rather than a spec
+        // written here: `smem_bytes` resolves `[model]` against the kernel's
+        // own directory, and a pin against a synthetic space would not
+        // notice the corpus changing under it.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/reduce-flip");
+        let spec = launchbound_space::KernelSpec::load(&dir).expect("the corpus kernel");
+        let dev = device("8.6").expect("the A10G row");
+
+        let rank = |()| -> Vec<String> {
+            let mut est: Vec<_> = enumerate(&spec)
+                .expect("a space")
+                .iter()
+                .map(|c| estimate(&spec, c, &dev).expect("an estimate"))
+                .collect();
+            est.sort_by(|a, b| {
+                a.cost
+                    .total_cmp(&b.cost)
+                    .then_with(|| a.config.cmp(&b.config))
+            });
+            est.into_iter().map(|e| e.config).collect()
+        };
+
+        let first = rank(());
+        assert!(
+            first.len() >= 8,
+            "the corpus kernel has a space to rank: {first:?}"
+        );
+        assert_eq!(
+            first,
+            rank(()),
+            "the same space must rank the same way twice"
+        );
+
+        // The ordering claim, checked against the costs it came from rather
+        // than against a copied list: sorted by cost means non-decreasing.
+        let mut costs: Vec<f64> = enumerate(&spec)
+            .expect("a space")
+            .iter()
+            .map(|c| estimate(&spec, c, &dev).expect("an estimate").cost)
+            .collect();
+        costs.sort_by(f64::total_cmp);
+        assert!(
+            costs.windows(2).all(|w| w[0] <= w[1]),
+            "costs must be totally ordered and comparable"
+        );
+        assert!(
+            costs.iter().all(|c| c.is_finite()),
+            "no candidate in this space is unlaunchable at cc 8.6, so none may cost infinity"
+        );
+    }
+
+    /// An unknown capability is an error that lists the known ones, never a
+    /// guess. A fabricated capacity still produces an occupancy number, and
+    /// an occupancy number is the sort of thing a reader believes.
+    #[test]
+    fn an_unknown_capability_names_the_ones_that_exist() {
+        let err = device("6.1").expect_err("Pascal is not in the table");
+        let text = err.to_string();
+        for known in ["7.5", "8.6", "9.0"] {
+            assert!(text.contains(known), "the error must list {known}: {text}");
+        }
+    }
+
     #[test]
     fn spearman_perfect_and_inverse_and_ties() {
         assert_eq!(
