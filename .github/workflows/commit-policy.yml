@@ -11,12 +11,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: commit-policy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
           # On PRs, check the real commits — not the synthetic merge commit
           # GitHub fabricates (committer GitHub <noreply@github.com>, no DCO).

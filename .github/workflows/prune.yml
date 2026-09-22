@@ -12,6 +12,12 @@ on:
 permissions:
   contents: read
 
+# The gate installs the published analyzer from source on every run, so a
+# superseded one is the most expensive thing here to leave running.
+concurrency:
+  group: prune-${{ github.ref }}
+  cancel-in-progress: true
+
 # The lockstep pin pair, written once. A pin bump touches this block,
 # rust-toolchain.toml, and the action defaults (action/action.yml) — the
 # pins.yml issue body lists every site.
@@ -22,14 +28,17 @@ env:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # The corpus expects the cuda-oxide checkout as a sibling.
           path: launchbound
       - name: Check out pinned cuda-oxide as sibling
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: NVlabs/cuda-oxide
           ref: 26754ae52c26c097dc1c465a1e42c4c5d05a3d40
           path: cuda-oxide
@@ -49,7 +58,7 @@ jobs:
           rustup component add rustc-dev llvm-tools rust-src --toolchain "$PINNED_TOOLCHAIN"
           cargo "+$PINNED_TOOLCHAIN" install --locked cargo-reconverge --version "$RECONVERGE_VERSION"
           cargo "+$PINNED_TOOLCHAIN" install --locked reconverge-driver --version "$RECONVERGE_VERSION"
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: just
       - name: Gate tests (the most important in the repo)

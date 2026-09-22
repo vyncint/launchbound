@@ -17,6 +17,12 @@ permissions:
   contents: read
   issues: write
 
+# A dispatch landing on top of the weekly tick would otherwise race to open
+# the same drift issue twice.
+concurrency:
+  group: pins
+  cancel-in-progress: false
+
 # The lockstep pin set. A pin bump updates these values (and
 # rust-toolchain.toml) in its own commit.
 env:
@@ -28,12 +34,13 @@ env:
 jobs:
   watch:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       # Needed for the toolchain comparison: the nightly we pin lives in
       # rust-toolchain.toml, not in this file's env block.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # This job reads one file and talks to `gh api` with the job token;
           # it never pushes, so the checkout credential is pure attack surface.

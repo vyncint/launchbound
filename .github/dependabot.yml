@@ -1,0 +1,24 @@
+# Weekly, for both ecosystems. The sibling repository has had this; this one
+# did not, and the drift was measurable: every `actions/checkout` here sat on
+# v4 while reconverge was on v7, and nothing would ever have said so.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      # The lockstep pin set is not dependabot's business. CONTRIBUTING.md and
+      # scripts/check-pins.sh are explicit that the nightly, the cuda-oxide
+      # commit and the reconverge version move together or not at all, across
+      # ten files, in their own commit with its own gate re-run. A PR bumping
+      # reconverge alone would fail check-pins.sh -- the right outcome, and
+      # weekly noise. pins.yml already watches these three and opens an issue
+      # for a human to act on.
+      - dependency-name: reconverge*
+      - dependency-name: cargo-reconverge
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
