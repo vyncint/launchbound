@@ -26,9 +26,9 @@ concurrency:
 # The lockstep pin set. A pin bump updates these values (and
 # rust-toolchain.toml) in its own commit.
 env:
-  CUDA_OXIDE_PIN: 26754ae52c26c097dc1c465a1e42c4c5d05a3d40
+  CUDA_OXIDE_PIN: b0f961df3af0ff140b3b006fa2b6750b71f43f62
   CUDA_OXIDE_REPO: NVlabs/cuda-oxide
-  RECONVERGE_PIN: v0.6.0
+  RECONVERGE_PIN: v0.7.0
   RECONVERGE_REPO: vyncint/reconverge
 
 jobs:

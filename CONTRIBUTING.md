@@ -190,7 +190,7 @@ The `pins.yml` workflow reports upstream movement by opening an issue; it
 never bumps anything. It runs every Monday, and reports a toolchain move as
 its own line — a channel change means reconverge must be rebuilt, which
 commit churn does not. Current pins: nightly-2026-08-28,
-cuda-oxide 26754ae5, reconverge 0.6.0 (installed from crates.io).
+cuda-oxide b0f961df, reconverge 0.7.0 (installed from crates.io).
 
 ## 10. License
 

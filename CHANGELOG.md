@@ -9,6 +9,26 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+### Changed
+
+- **The lockstep pin set moves: cuda-oxide `b0f961df`, reconverge `0.7.0`,
+  nightly unchanged** (#70). Its own commit across every site
+  `scripts/check-pins.sh` lists, because the policy is "every site or not at
+  all" and 2.0.0 did four of six.
+
+  reconverge 0.7.0 is the release that matters here rather than a routine
+  bump. Before it, a cluster- or grid-wide barrier under a guard that is only
+  *block*-uniform produced no findings at all — so the gate this product is
+  built on could not see that class, and 2.2.1 shipped with a reconverge that
+  could not.
+
+  Verified at the new set rather than assumed: `just gate` passes all three
+  gate tests — the most important in this repository — and `just prune` over
+  the whole corpus returns **the same verdicts**, including `reduce-flip`'s
+  3 clean / 8 refused, which is the known-flip split the README quotes. The
+  new analyzer changes what it can see and does not change what this corpus
+  is told.
+
 ### Added
 
 - **A dispatchable workflow that re-runs the CUDA path.** Nothing automated

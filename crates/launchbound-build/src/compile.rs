@@ -173,7 +173,7 @@ fn is_missing_subcommand(stderr: &str) -> bool {
 /// asserts this constant against `rust-toolchain.toml` and the workflows,
 /// because drift between recorded pins is the failure this repository keeps
 /// hitting.
-pub const CUDA_OXIDE_PIN: &str = "26754ae52c26c097dc1c465a1e42c4c5d05a3d40";
+pub const CUDA_OXIDE_PIN: &str = "b0f961df3af0ff140b3b006fa2b6750b71f43f62";
 
 /// What to say when `cargo oxide` is not installed.
 fn missing_oxide_message() -> String {
