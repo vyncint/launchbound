@@ -11,6 +11,33 @@ change measured timings are marked `bench:`.
 
 ### Added
 
+- **A dispatchable workflow that re-runs the CUDA path.** Nothing automated
+  had ever run it. There is no GPU job anywhere else here,
+  `crates/launchbound-bench/src/cuda.rs` has no test that executes, and the
+  headline result in the README — the A10G sweep where six refused
+  configurations measured up to 3.00x faster — was produced by hand on
+  2026-08-20 and has not been reproduced since. The lockstep pin set has
+  moved twice in between, and `docs/LIMITATIONS.md` already records a known
+  way for the compile step to break. Nothing would have said so.
+
+  `gpu.yml` splits the work the way `stage` and `launchbound-runner` were
+  designed to be split: pruning and compiling happen on `ubuntu-latest`, and
+  the box-side binary ships beside the plan, so the expensive machine needs a
+  driver and nothing else — no toolchain, no cuda-oxide checkout, no
+  analyzer. It is `workflow_dispatch` only, because it costs money, and with
+  `measure: false` it stages a plan for a box you drive by hand.
+
+  It gates on the claims that **port** — the schema, no candidate in the
+  results that is not in the plan, no admitted candidate that failed to run,
+  something measured — and records the numbers with their device, driver and
+  plan capability rather than asserting them. Timings are exactly what does
+  not transfer between parts.
+
+  It does not provision the machine: this repository holds no cloud
+  credentials, and adding one is a decision with a blast radius rather than a
+  workflow detail.
+
+
 - **Issue forms, a pull-request template and `CODEOWNERS`.** `.github/` held
   `scripts/` and `workflows/` and nothing else.
 

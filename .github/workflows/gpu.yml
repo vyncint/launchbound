@@ -1,0 +1,245 @@
+# The CUDA measurement path, on real silicon, by hand.
+#
+# Nothing automated had ever run it. There is no GPU job anywhere else in
+# this repository, `crates/launchbound-bench/src/cuda.rs` has no test that
+# executes, and the headline result in the README -- the A10G sweep where six
+# refused configurations measured up to 3.00x faster -- was produced on
+# 2026-08-20 and has not been reproduced since. Between then and now the
+# lockstep pin set moved twice, and `docs/LIMITATIONS.md` already records a
+# known way for the compile step to break: `cargo check` under the reconverge
+# driver does not evaluate all codegen-time consts, so a gate-clean candidate
+# can still fail to build. Nothing would have told us if it had.
+#
+# For a tool whose output is a configuration you ship, "the measurement path
+# last ran a month ago on a machine that no longer exists" is the gap that
+# matters most.
+#
+# WHAT THIS ASSERTS, AND WHAT IT DOES NOT
+#
+# Timings are the thing that does not port (docs/LIMITATIONS.md, "Results do
+# not port"): they are valid only for the GPU, driver and compiler in their
+# provenance, and `sm_75` and `sm_86` do not transfer. So this gates on the
+# structural claims -- every refused candidate is still refused at this pin,
+# every admitted candidate compiles, the chosen configuration is one the gate
+# admits, the results validate against the schema -- and merely *records* the
+# numbers, with their provenance beside them.
+#
+# WHY IT IS DISPATCH-ONLY, AND WHY IT DOES NOT PROVISION
+#
+# It costs money, so it never runs on a push or a schedule. It also does not
+# create the machine: this repository holds no cloud credentials, and adding
+# one is a decision with a blast radius rather than a workflow detail. The
+# split it uses instead is the one the product already has -- `stage`
+# compiles every admitted specialization on a plain runner and emits a bench
+# plan, and `launchbound-runner` consumes that plan on the box. The `stage`
+# job here needs no GPU and runs on `ubuntu-latest`; the `measure` job runs
+# wherever `runner` says, which defaults to a self-hosted label.
+#
+# To run it without a self-hosted runner: dispatch with `measure: false`,
+# take the `bench-plan` artifact to any CUDA box, and run
+#
+#   launchbound-runner --budget-secs <S> plan/plan.json results.json
+#
+# which is the same command this workflow issues.
+name: gpu
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel:
+        description: "Corpus kernel to measure (a directory under corpus/)"
+        required: true
+        default: reduce-flip
+        type: string
+      cc:
+        description: "Compute capability of the target part, e.g. 8.6 for an A10G"
+        required: true
+        default: "8.6"
+        type: string
+      budget_secs:
+        description: >-
+          Wall-clock ceiling for the sweep, in seconds. Enforced: the runner
+          refuses a value it cannot parse rather than treating it as no
+          budget.
+        required: true
+        default: "900"
+        type: string
+      runner:
+        description: >-
+          The label of a runner with a CUDA device and driver. Leave as the
+          default unless you have registered one under a different label.
+        required: false
+        default: gpu
+        type: string
+      measure:
+        description: >-
+          Run the sweep. With this off, only the plan is staged and uploaded,
+          which needs no GPU -- useful for taking the plan to a box by hand.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# Never cancel a sweep that is already spending GPU time; a second dispatch
+# queues behind the first.
+concurrency:
+  group: gpu-${{ inputs.kernel }}-${{ inputs.cc }}
+  cancel-in-progress: false
+
+env:
+  PINNED_TOOLCHAIN: nightly-2026-08-28
+  RECONVERGE_VERSION: "0.6.0"
+
+jobs:
+  # Prune and compile on a plain runner, exactly as `stage` is designed to be
+  # used. Doing this here rather than on the box keeps the expensive machine
+  # busy only for the part that needs it.
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      admitted: ${{ steps.plan.outputs.admitted }}
+      refused: ${{ steps.plan.outputs.refused }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: launchbound
+      - name: Check out pinned cuda-oxide as sibling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: NVlabs/cuda-oxide
+          ref: 26754ae52c26c097dc1c465a1e42c4c5d05a3d40
+          path: cuda-oxide
+      - name: Install pinned toolchain
+        working-directory: launchbound
+        run: rustup show
+      - name: Install pinned cargo-reconverge + driver from crates.io
+        run: |
+          rustup component add rustc-dev llvm-tools rust-src --toolchain "$PINNED_TOOLCHAIN"
+          cargo "+$PINNED_TOOLCHAIN" install --locked cargo-reconverge --version "$RECONVERGE_VERSION"
+          cargo "+$PINNED_TOOLCHAIN" install --locked reconverge-driver --version "$RECONVERGE_VERSION"
+      - name: Stage the admitted specializations
+        id: plan
+        working-directory: launchbound
+        env:
+          KERNEL: ${{ inputs.kernel }}
+          CC: ${{ inputs.cc }}
+        run: |
+          set -euo pipefail
+          cargo run --release -p launchbound-cli --bin launchbound -- \
+            stage "corpus/$KERNEL" --cc "$CC" --out plan
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          plan = json.load(open("plan/plan.json"))
+          admitted = len(plan["candidates"])
+          refused = sum(1 for c in plan["candidates"] if c.get("unsafe_candidate"))
+          assert admitted, "an empty plan is nothing to measure"
+          print(f"admitted={admitted}")
+          print(f"refused={refused}")
+          PY
+          echo "staged $(python3 -c 'import json;print(len(json.load(open("plan/plan.json"))["candidates"]))') candidates"
+      # The build of the runner goes with the plan, so the GPU box needs no
+      # toolchain, no cuda-oxide checkout and no analyzer -- only a driver.
+      - name: Build the box-side runner
+        working-directory: launchbound
+        run: |
+          cargo build --release -p launchbound-runner
+          cp target/release/launchbound-runner plan/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bench-plan-${{ inputs.kernel }}-${{ inputs.cc }}
+          path: launchbound/plan
+
+  measure:
+    needs: stage
+    if: ${{ inputs.measure }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: bench-plan-${{ inputs.kernel }}-${{ inputs.cc }}
+          path: plan
+      - name: Record the provenance before anything is measured
+        run: |
+          set -euo pipefail
+          nvidia-smi --query-gpu=name,compute_cap,driver_version --format=csv
+          nvcc --version | tail -2 || echo "no nvcc on this box (only the driver is required)"
+      - name: Measure
+        env:
+          BUDGET: ${{ inputs.budget_secs }}
+        run: |
+          set -euo pipefail
+          chmod +x plan/launchbound-runner
+          ./plan/launchbound-runner --budget-secs "$BUDGET" plan/plan.json plan/results.json
+      # The invariants, which do port. Not the timings, which do not.
+      - name: Check what the run is allowed to claim
+        env:
+          REFUSED: ${{ needs.stage.outputs.refused }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys
+
+          plan = json.load(open("plan/plan.json"))
+          results = json.load(open("plan/results.json"))
+
+          failures = []
+          if results.get("schema") != "results.v1":
+              failures.append(f"schema is {results.get('schema')!r}, not results.v1")
+
+          # Every candidate in the plan was admitted by the gate: `stage`
+          # without --allow-unsafe emits only those. A refused one appearing
+          # here would mean the gate and the plan disagree, which is the
+          # failure this whole product exists to prevent.
+          refused_in_plan = [c["id"] for c in plan["candidates"] if c.get("unsafe_candidate")]
+          if refused_in_plan and os.environ.get("REFUSED") == "0":
+              failures.append(f"plan carries refused candidates it should not: {refused_in_plan}")
+
+          measured = {c["id"]: c for c in results["candidates"]}
+          planned = {c["id"] for c in plan["candidates"]}
+          unknown = set(measured) - planned
+          if unknown:
+              failures.append(f"results name candidates the plan does not: {sorted(unknown)}")
+
+          # A candidate the gate admitted and the compiler then refused is the
+          # documented hole (docs/LIMITATIONS.md, "cuda-oxide is alpha"). It is
+          # reported rather than tolerated: each one names another codegen-time
+          # const the gate does not evaluate.
+          errored = [c["id"] for c in measured.values() if c.get("status") == "error"]
+          if errored:
+              failures.append(f"admitted candidates that failed to run: {errored}")
+
+          ok = [c for c in measured.values() if c.get("status") == "ok"]
+          if not ok:
+              failures.append("nothing was measured successfully")
+
+          print(f"device: {results.get('device_name')} "
+                f"(cc {results.get('device_cc')}, driver {results.get('driver_version')})")
+          print(f"plan cc {results.get('plan_cc')}; "
+                f"{len(ok)} of {len(planned)} candidates measured; "
+                f"{results.get('total_gpu_seconds', 0):.1f} GPU-seconds")
+          if results.get("budget_exhausted"):
+              print("NOTE: the budget was spent before the sweep finished; this is resumable.")
+          for c in sorted(ok, key=lambda c: c["summary"]["median_ms"])[:5]:
+              print(f"  {c['summary']['median_ms']:.5f} ms  {c['config']}")
+
+          if failures:
+              print("\nFAILED:", file=sys.stderr)
+              for f in failures:
+                  print(f"  - {f}", file=sys.stderr)
+              sys.exit(1)
+          print("\nevery structural claim holds at this pin")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: gpu-results-${{ inputs.kernel }}-${{ inputs.cc }}
+          path: plan/results.json

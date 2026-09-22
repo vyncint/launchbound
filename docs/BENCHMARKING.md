@@ -33,3 +33,49 @@ a profiler (Nsight Compute) in context.
 `--allow-unsafe --reason ...`, behind a watchdog with a pre-checkpointed
 `timeout` record: a hang is a recorded result, not a crash. Their timings
 appear only in the rejection report and are never presented as safe.
+
+## Re-running the CUDA path
+
+`gpu.yml` is dispatch-only, because it costs money. It never runs on a push
+or a schedule.
+
+```sh
+gh workflow run gpu.yml \
+  -f kernel=reduce-flip -f cc=8.6 -f budget_secs=900 -f runner=gpu
+```
+
+Two jobs, split the way `stage` and `launchbound-runner` were designed to be
+split. `stage` prunes and compiles every admitted specialization on a plain
+`ubuntu-latest` runner, builds the box-side binary beside the plan, and
+uploads both as one artifact — so the expensive machine needs a driver and
+nothing else: no toolchain, no cuda-oxide checkout, no analyzer. `measure`
+runs on whatever `runner` names.
+
+**Without a self-hosted runner**, dispatch with `-f measure=false`, take the
+`bench-plan` artifact to any CUDA box, and run the same command the workflow
+issues:
+
+```sh
+./launchbound-runner --budget-secs 900 plan.json results.json
+```
+
+### What it gates on
+
+The structural claims, which port:
+
+- the results declare `results.v1`
+- no candidate in the results is absent from the plan
+- no admitted candidate failed to run — one that does is the hole under
+  "cuda-oxide is alpha" in [LIMITATIONS](LIMITATIONS.md), and each is worth
+  reporting because it names another codegen-time const the gate does not
+  evaluate
+- something was measured
+
+**Not the timings.** Those are valid only for the GPU, driver and compiler in
+their provenance, and `sm_75` and `sm_86` do not transfer — so the workflow
+prints the five fastest with the device, driver and plan capability beside
+them, and uploads `results.json`, rather than asserting a number.
+
+It also does not provision the machine. This repository holds no cloud
+credentials, and adding one is a decision with a blast radius rather than a
+workflow detail.
