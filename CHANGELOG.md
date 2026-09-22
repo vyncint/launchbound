@@ -9,6 +9,14 @@ change measured timings are marked `bench:`.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-22
+
+The production-readiness release. It moves the lockstep set onto a
+reconverge that can see a class the old one could not, puts tests under the
+part of this tool that decides what the number is, and closes the supply
+chain and release gaps that let a published version go unannounced for
+twelve days.
+
 ### Changed
 
 - **The lockstep pin set moves: cuda-oxide `b0f961df`, reconverge `0.7.0`,
