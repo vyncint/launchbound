@@ -58,7 +58,7 @@ jobs:
           rustup component add rustc-dev llvm-tools rust-src --toolchain "$PINNED_TOOLCHAIN"
           cargo "+$PINNED_TOOLCHAIN" install --locked cargo-reconverge --version "$RECONVERGE_VERSION"
           cargo "+$PINNED_TOOLCHAIN" install --locked reconverge-driver --version "$RECONVERGE_VERSION"
-      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: just
       - name: Gate tests (the most important in the repo)
