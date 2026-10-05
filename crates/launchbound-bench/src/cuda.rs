@@ -28,7 +28,7 @@ macro_rules! driver_api {
             pub fn load() -> Result<Self, String> {
                 let lib = ["libcuda.so.1", "libcuda.so"]
                     .iter()
-                    .find_map(|n| unsafe { Library::new(n).ok() })
+                    .find_map(|n| unsafe { Library::new(*n).ok() })
                     .ok_or_else(|| {
                         "libcuda not found: benchmarks need an NVIDIA driver".to_string()
                     })?;
