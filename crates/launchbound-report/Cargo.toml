@@ -19,4 +19,13 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 insta = { version = "1", features = ["json"] }
-jsonschema = "0.26"
+# Only `validator_for` on the local schema, which has no remote `$ref`: the
+# default features add an HTTP client and a TLS stack (aws-lc, a C build) for
+# nothing this test does.
+jsonschema = { version = "0.58", default-features = false }
+# The golden snapshots statistics computed from numbers this test parses
+# back from JSON, so it depends on how serde_json parses floats. Say so here
+# rather than inherit it from whatever a transitive dependency enables: a
+# jsonschema bump flipped exactly this once, moving the last digit of a
+# dozen values.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
