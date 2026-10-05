@@ -84,7 +84,7 @@ jobs:
       # and uploads the SVG/HTML. It installs termlens-cli itself, pinned to
       # the version the lockfile names so the renderer and the library that
       # wrote the file are one release — the same rule tests/cli.rs enforces.
-      - uses: vyncint/termlens/.github/actions/report@6a1411e316a83a4208289862b7532beda552deb7 # v0.11.2
+      - uses: vyncint/termlens/.github/actions/report@de7fe39df19fd2c9649a8a296a680ca6abe3b40b # v0.11.4
         if: failure()
         with:
           name: termlens-report-ci-${{ matrix.os }}
