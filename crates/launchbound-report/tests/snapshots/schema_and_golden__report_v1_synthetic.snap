@@ -1,6 +1,5 @@
 ---
 source: crates/launchbound-report/tests/schema_and_golden.rs
-assertion_line: 137
 expression: value
 ---
 {
@@ -13,7 +12,7 @@ expression: value
       "measurement_status": "ok",
       "rules": [],
       "summary": {
-        "ci95_hi_ms": 0.0503,
+        "ci95_hi_ms": 0.050300000000000004,
         "ci95_lo_ms": 0.050100000000000006,
         "max_ms": 0.0504,
         "mean_ms": 0.05019999999999996,
@@ -32,7 +31,7 @@ expression: value
       "rules": [],
       "summary": {
         "ci95_hi_ms": 0.0403,
-        "ci95_lo_ms": 0.0401,
+        "ci95_lo_ms": 0.040100000000000004,
         "max_ms": 0.0404,
         "mean_ms": 0.04020000000000001,
         "median_ms": 0.0402,
@@ -55,7 +54,7 @@ expression: value
         }
       ],
       "summary": {
-        "ci95_hi_ms": 0.0203,
+        "ci95_hi_ms": 0.020300000000000002,
         "ci95_lo_ms": 0.0201,
         "max_ms": 0.0204,
         "mean_ms": 0.020199999999999992,
@@ -87,7 +86,7 @@ expression: value
     "id": "c1-bbbb",
     "summary": {
       "ci95_hi_ms": 0.0403,
-      "ci95_lo_ms": 0.0401,
+      "ci95_lo_ms": 0.040100000000000004,
       "max_ms": 0.0404,
       "mean_ms": 0.04020000000000001,
       "median_ms": 0.0402,
@@ -119,7 +118,7 @@ expression: value
       ],
       "speedup_vs_chosen": 1.99009900990099,
       "summary": {
-        "ci95_hi_ms": 0.0203,
+        "ci95_hi_ms": 0.020300000000000002,
         "ci95_lo_ms": 0.0201,
         "max_ms": 0.0204,
         "mean_ms": 0.020199999999999992,
