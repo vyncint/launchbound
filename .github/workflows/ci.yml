@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - name: Install pinned toolchain from rust-toolchain.toml
         run: rustup show
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@183e4297cca2404691e9380e1307288dced5c82a # v2.87.25
         with:
           tool: just,cargo-deny
       # The Metal path, executed rather than merely compiled.
@@ -129,7 +129,7 @@ jobs:
       # A prebuilt binary, downloaded every run: never built from source, and
       # never restored from a cache. A gate that reports on whatever a cache
       # held the day it was filled is not reporting on this PR.
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@183e4297cca2404691e9380e1307288dced5c82a # v2.87.25
         with:
           tool: cargo-semver-checks
       - name: Compare the public API against the published baseline
@@ -153,7 +153,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install 1.88 --profile minimal
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@183e4297cca2404691e9380e1307288dced5c82a # v2.87.25
         with:
           tool: just
       - run: just msrv
